@@ -2,11 +2,21 @@ import sys
 from itertools import groupby
 import networkx as nx
 from matplotlib import pyplot as plt
-from NNToGraph import I_str, H_str, O_str
+from NNToGraph import I_str, H_str, B_str, O_str
 from typing import Dict, Tuple
 
+NODE_SIZE = 800
+NODE_COLOR = 'skyblue'
+FONT_SIZE = 8
+FONT_WEIGHT = 'bold'
+EDGE_LABEL_FONT_COLOR = 'red'
+INTER_LAYER_DISTANCE = 1.0
+INTRA_LAYER_DISTANCE = 0.5
 
-def visualize_model_graph(G: nx.DiGraph, inter_layer_distance: float = 1.0, intra_layer_distance: float = 0.5,
+
+def visualize_model_graph(G: nx.DiGraph,
+                          inter_layer_distance: float = INTER_LAYER_DISTANCE,
+                          intra_layer_distance: float = INTRA_LAYER_DISTANCE,
                           round_digits: int = None):
     """
     Visualizes a neuron-level graph representation of a neural network model. The graph is drawn with nodes
@@ -18,10 +28,10 @@ def visualize_model_graph(G: nx.DiGraph, inter_layer_distance: float = 1.0, intr
     :param intra_layer_distance: Distance between neurons in the same layer
     """
     pos = nn_layout(G, inter_layer_distance, intra_layer_distance)
-    nx.draw(G, pos, with_labels=True, node_size=800, node_color='skyblue', font_size=8, font_weight='bold')
+    nx.draw(G, pos, with_labels=True, node_size=NODE_SIZE, node_color=NODE_COLOR, font_size=FONT_SIZE, font_weight=FONT_WEIGHT)
     edge_labels = nx.get_edge_attributes(G, 'weight') if round_digits is None \
         else {k: round(v, round_digits) for k, v in nx.get_edge_attributes(G, 'weight').items()}
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color=EDGE_LABEL_FONT_COLOR)
     plt.show()
 
 
@@ -42,6 +52,7 @@ def nn_layout(G: nx.DiGraph, inter_layer_distance: float, intra_layer_distance: 
     def layer_order(s: str):
         if s.startswith(I_str): return 0
         if s.startswith(H_str): return 1 + int(s[len(H_str):])
+        if s.startswith(B_str): return 1 + int(s[len(B_str):]) - 0.5
         if s.startswith(O_str): return sys.maxsize
         return -1
 
@@ -54,13 +65,21 @@ def nn_layout(G: nx.DiGraph, inter_layer_distance: float, intra_layer_distance: 
     # Sort layers by their order
     sorted_layers = sorted(layers, key=lambda x: layer_order(x[0]))
 
+    max_nodes = max(len(nodes) for _, nodes in sorted_layers)
     i = 0  # Horizontal layer position
-    for _, layer_nodes in sorted_layers:
+    for layer_key, layer_nodes in sorted_layers:
         layer_nodes = list(layer_nodes)  # Consume the iterator to make it reusable
-        j = -len(layer_nodes) * 0.5 * intra_layer_distance  # Start vertical position
-        for node in sorted(layer_nodes, key=lambda x: int(x.split("_")[1])):
-            pos[node] = (i, j)
-            j += intra_layer_distance  # Increment vertical position
+
+        if layer_key.startswith(B_str): # Bias layer
+            j = (max_nodes+2) * 0.5 * intra_layer_distance
+            pos[layer_nodes[0]] = (i, j)
+
+        else:
+            j = len(layer_nodes) * 0.5 * intra_layer_distance # Start vertical position
+            for node in sorted(layer_nodes, key=lambda x: int(x.split("_")[1])):
+                pos[node] = (i, j)
+                j -= intra_layer_distance  # Decrement vertical position
+
         i += inter_layer_distance  # Increment horizontal layer position
 
     return pos
