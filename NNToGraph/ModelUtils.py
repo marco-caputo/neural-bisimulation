@@ -10,15 +10,18 @@ AFFINE_TRANS_LAYER_TYPES = {torch.nn.Linear, tf.keras.layers.Dense}
 @dispatch(torch.nn.Module)
 def layers(model: torch.nn.Module, layer_type=None) -> Iterator[Any]:
     """
-    Extracts layers of a specific type from a PyTorch model.
+    Extracts layers of a specific type from all ModuleLists within a PyTorch model.
+    If no layer type is specified, all layers are extracted.
 
     :param model: PyTorch model
     :param layer_type: Type of the layer to extract
     :return: List of layers of the specified type
     """
-    for _, layer in model.named_modules():
-        if layer is None or isinstance(layer, layer_type):
-            yield layer
+    for _, module in model.named_children():
+        if isinstance(module, torch.nn.ModuleList):
+            for layer in module:
+                if layer_type is None or isinstance(layer, layer_type):
+                    yield layer
 
 
 def get_layer_tensor(layer: torch.nn.Linear | tf.keras.layers.Dense) -> list[list[float]]:
@@ -63,12 +66,12 @@ def layers(model: tf.keras.Model, layer_type=None) -> Iterator[Any]:
     :return: List of layers of the specified type
     """
     for layer in model.layers:
-        if layer is None or isinstance(layer, layer_type):
+        if layer_type is None or isinstance(layer, layer_type):
             yield layer
 
 
 @dispatch(torch.nn.Module)
-def tensors(model: torch.nn.Module) -> Iterator[list[float, float]]:
+def tensors(model: torch.nn.Module) -> Iterator[list[list[float]]]:
     """
     Extracts tensors from a PyTorch model as bi-dimensional lists of weights.
     The provided tensors are the weights of the model's linear layers in the order
@@ -86,7 +89,7 @@ def tensors(model: torch.nn.Module) -> Iterator[list[float, float]]:
 
 
 @dispatch(tf.keras.Model)
-def tensors(model: tf.keras.Model) -> Iterator[list[float, float]]:
+def tensors(model: tf.keras.Model) -> Iterator[list[list[float]]]:
     """
     Extracts tensors from a TensorFlow model as bi-dimensional lists of weights.
     The provided tensors are the weights of the model's dense layers in the order
@@ -139,6 +142,15 @@ def input_dim(model: torch.nn.Module | tf.keras.Model) -> int:
     :return: the input dimension
     """
     return len(next(tensors(model)))
+
+def output_dim(model: torch.nn.Module | tf.keras.Model) -> int:
+    """
+    Returns the output dimension of a feed-forward PyTorch or a TensorFlow model.
+
+    :param model: PyTorch or TensorFlow model
+    :return: the output dimension
+    """
+    return len(list(tensors(model))[-1][0])
 
 
 def apply_to_tensors(model: torch.nn.Module | tf.keras.Model,
