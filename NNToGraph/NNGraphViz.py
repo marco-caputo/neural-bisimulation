@@ -2,7 +2,7 @@ import sys
 from itertools import groupby
 import networkx as nx
 from matplotlib import pyplot as plt
-from NNToGraph import I_str, H_str, B_str, O_str
+from NNToGraph import I_str, H_str, B_str, O_str, sep_1, sep_2
 from typing import Dict, Tuple
 
 NODE_SIZE = 800
@@ -10,14 +10,16 @@ NODE_COLOR = 'skyblue'
 FONT_SIZE = 8
 FONT_WEIGHT = 'bold'
 EDGE_LABEL_FONT_COLOR = 'red'
+
 INTER_LAYER_DISTANCE = 1.0
 INTRA_LAYER_DISTANCE = 0.5
+ROUND_DIGITS = 5
 
 
 def visualize_model_graph(G: nx.DiGraph,
                           inter_layer_distance: float = INTER_LAYER_DISTANCE,
                           intra_layer_distance: float = INTRA_LAYER_DISTANCE,
-                          round_digits: int = None):
+                          round_digits: int = ROUND_DIGITS):
     """
     Visualizes a neuron-level graph representation of a neural network model. The graph is drawn with nodes
     positioned in vertical-aligned layers with the same prefix (I, H, O) and ordered in the same layer by their
@@ -26,6 +28,7 @@ def visualize_model_graph(G: nx.DiGraph,
     :param G: Neuron-level graph representation
     :param inter_layer_distance: Distance between layers
     :param intra_layer_distance: Distance between neurons in the same layer
+    :param round_digits: Number of digits to round the edge weights to
     """
     pos = nn_layout(G, inter_layer_distance, intra_layer_distance)
     nx.draw(G, pos, with_labels=True, node_size=NODE_SIZE, node_color=NODE_COLOR, font_size=FONT_SIZE, font_weight=FONT_WEIGHT)
@@ -51,16 +54,16 @@ def nn_layout(G: nx.DiGraph, inter_layer_distance: float, intra_layer_distance: 
     # Sort layers by their order I -> H1 -> H2 -> ... -> O
     def layer_order(s: str):
         if s.startswith(I_str): return 0
-        if s.startswith(H_str): return 1 + int(s[len(H_str):])
-        if s.startswith(B_str): return 1 + int(s[len(B_str):]) - 0.5
+        if s.startswith(H_str): return 1 + int(s[len(H_str+sep_1):])
+        if s.startswith(B_str): return 1 + int(s[len(B_str+sep_1):]) - 0.5
         if s.startswith(O_str): return sys.maxsize
         return -1
 
     pos = {}
 
     # Sort nodes by their layer prefix for correct grouping
-    sorted_nodes = sorted(G.nodes, key=lambda n: n.split("_")[0])
-    layers = [(layer_key, list(nodes)) for layer_key, nodes in groupby(sorted_nodes, key=lambda n: n.split("_")[0])]
+    sorted_nodes = sorted(G.nodes, key=lambda n: n.split(sep_2)[0])
+    layers = [(layer_key, list(nodes)) for layer_key, nodes in groupby(sorted_nodes, key=lambda n: n.split(sep_2)[0])]
 
     # Sort layers by their order
     sorted_layers = sorted(layers, key=lambda x: layer_order(x[0]))
@@ -76,7 +79,7 @@ def nn_layout(G: nx.DiGraph, inter_layer_distance: float, intra_layer_distance: 
 
         else:
             j = len(layer_nodes) * 0.5 * intra_layer_distance # Start vertical position
-            for node in sorted(layer_nodes, key=lambda x: int(x.split("_")[1])):
+            for node in sorted(layer_nodes, key=lambda x: int(x.split(sep_2)[1])):
                 pos[node] = (i, j)
                 j -= intra_layer_distance  # Decrement vertical position
 
