@@ -1,4 +1,4 @@
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Callable
 
 from z3 import *
 import tensorflow as tf
@@ -34,8 +34,11 @@ def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
                             input_bounds: List[Tuple[float, float]] = None) -> Tuple[BoolRef, list[Real], list[Real]]:
     """
     Converts a feed-forward model into a SMT Formula representing its input-output relation.
-    This method requires that the provided model has its activation functions defined as layers, in order to
-    make them visible and correctly encode them into the SMT formula.
+    In case a PyTorch model is provided, this method requires that the provided model has its activation functions
+    defined as layers, in order tomake them visible and correctly encode them into the SMT formula.
+    For TensorFlow models, the activation functions are not required to be defined as layers, but they must be
+    activation function defined in the TensorFlow library supported by this method.
+
     The provided SMT Formula is a conjunction of constraints that represent the relation between the input
     and output lists of variables of the model, in particular:
 
@@ -82,7 +85,8 @@ def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
 
     # Process each layer of the network
     current_layer = list(inputs)
-    for l_idx, l_type, l_params in enumerate([_get_layer_info(layer) for layer in layers(model)]):
+    for l_idx, layer in enumerate(layers(model)):
+        l_type, l_params = _get_layer_info(layer)
         next_layer = []
 
         if l_type == "AffineTrans":  # z_j = sum_k (x_k * W_kj) + b_j
@@ -94,6 +98,13 @@ def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
                 affine_expr = Sum([current_layer[k] * ws[j][k] for k in range(len(ws))]) + bs[j]
                 constraints.append(simplify(z == affine_expr))
                 next_layer.append(z)
+
+            if isinstance(model, tf.keras.Model) and layer.activation is not None: # Add activation function as a layer
+                l_type, l_params = _get_layer_info(_to_layer(layer.activation))
+                for j, z in enumerate(next_layer):
+                    h = Real(f'h{l_idx}_{j}')
+                    constraints.append(simplify(h == _activation_function_formula(l_type, l_params, z)))
+                    next_layer[j] = h
 
         else:
             for j, z in enumerate(current_layer):
@@ -188,6 +199,33 @@ def _get_layer_info(layer: Any) -> Tuple[str, dict[str, Any]]:
         return "Identity", {}
 
     raise NotImplementedError(f"Unsupported layer type: {l_type}")
+
+
+def _to_layer(activation: Callable) -> Any:
+    """
+    Converts an tensor flow activation function into a layer, if not already a layer.
+
+    :param activation: The activation function
+    :return: The corresponding layer
+    """
+    if type(activation) in [tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU,
+                            tf.keras.layers.ReLU6, tf.keras.layers.Activation]:
+        return activation
+
+    if activation == tf.keras.activations.relu:
+        return tf.keras.layers.ReLU()
+    if activation == tf.keras.activations.leaky_relu:
+        return tf.keras.layers.LeakyReLU()
+    if activation == tf.keras.activations.relu6:
+        return tf.keras.layers.ReLU(6)
+    if activation == tf.keras.activations.hard_sigmoid:
+        return tf.keras.layers.Activation(tf.keras.activations.hard_sigmoid)
+    if activation == tf.keras.activations.hard_swish:
+        return tf.keras.layers.Activation(tf.keras.activations.hard_swish)
+    if activation == tf.keras.activations.hard_silu:
+        return tf.keras.layers.Activation(tf.keras.activations.hard_silu)
+
+    raise NotImplementedError(f"Unsupported activation function: {activation}")
 
 
 def _activation_function_formula(type: str, p: dict[str, Any], z: Real) -> BoolRef:
