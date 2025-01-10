@@ -6,17 +6,24 @@ import torch
 from NNToGraph import *
 
 
-def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torch.nn.Module | tf.keras.Model) -> bool:
+def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torch.nn.Module | tf.keras.Model) \
+        -> Tuple[bool, List[float] | None]:
     """
     Checks if two feed-forward models are strictly equivalent.
     Two models are strictly equivalent if for every possible input, they produce the same exact output.
+    The equivalence is checked by proving the unsatisfiability of the formula that represents the negation of the
+    equivalence between each of the two models output variables.
+    Besides the boolean value representing the equivalence, if the two models are not strictly equivalent, a
+    counterexample consisting in a list of input values that produce different outputs is returned,
+    otherwise None is returned.
 
     Note that, in order to check the equivalence, the input and the output dimensions of the two models must be the
     same, otherwise an exception is raised.
 
     :param model1: The first model
     :param model2: The second model
-    :return: True if the models are strictly equivalent, False otherwise
+    :return: a tuple containing a boolean indicating if the two models are strictly equivalent and a counterexample
+     if they are not
     """
     if input_dim(model1) != input_dim(model2):
         raise ValueError(f"Expected models with the same input dimension, but got {input_dim(model1)} and {input_dim(model2)}")
@@ -27,11 +34,36 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torc
     formula1, inputs1, outputs1 = encode_into_SMT_formula(model1)
     formula2, inputs2, outputs2 = encode_into_SMT_formula(model2)
 
-    # Check if the two formulas are equivalent
-    return simplify(ForAll(inputs1, Implies(formula1, formula2))) == BoolVal(True)
+    # Build the strict equivalence formula
+    inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
+    outputs_equivalence = And([outputs1[i] == outputs2[i] for i in range(len(outputs2))])
+    formula = Exists([*inputs1], And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence)))
 
-def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
-                            input_bounds: List[Tuple[float, float]] = None) -> Tuple[BoolRef, list[Real], list[Real]]:
+    # Check if the two formulas are equivalent
+    return _get_formula_satisfiability(formula, inputs1)
+
+def _get_formula_satisfiability(formula: BoolRef, inputs: List[Real]) -> Tuple[bool, List[float] | None]:
+    """
+    Checks the satisfiability of a Z3 formula involving the given list of real variables as inputs and returns a
+    counterexample if the formula is satisfiable.
+
+    :param formula: A Z3 formula
+    :param inputs: A list of Z3 real variables involved in the formula
+    :return: A tuple containing a boolean indicating if the formula is satisfiable and a counterexample if it is
+    """
+    s = Solver()
+    s.add(formula)
+    result = s.check()
+    if result == sat:
+        model = s.model()
+        return False, [model.evaluate(x).as_decimal(5) for x in inputs]
+    elif result == unsat:
+        return True, None
+    else:
+        raise RuntimeError("Solver returned 'unknown'. The equivalence might be too complex to decide.")
+
+def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model, input_bounds: List[Tuple[float, float]] = None) \
+        -> Tuple[BoolRef, list[Real], list[Real]]:
     """
     Converts a feed-forward model into a SMT Formula representing its input-output relation.
     In case a PyTorch model is provided, this method requires that the provided model has its activation functions
