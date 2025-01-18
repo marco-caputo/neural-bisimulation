@@ -1,5 +1,5 @@
 from typing import Any, Callable, Iterator
-
+import copy
 import tensorflow as tf
 import torch
 from multipledispatch import dispatch
@@ -26,7 +26,7 @@ def layers(model: torch.nn.Module, layer_type=None) -> Iterator[Any]:
 
 def get_layer_tensor(layer: torch.nn.Linear | tf.keras.layers.Dense) -> list[list[float]]:
     """
-    Extracts the weights tensor from a linear layer of a PyTorch or a dene layer of a TensorFlow model.
+    Extracts the weights tensor from a linear layer of a PyTorch or a dense layer of a TensorFlow model.
 
     The provided tensor is the weights of the layer's linear/dense layer.
     Each weight in the tensor in position i, j represents the weight of the connection
@@ -43,7 +43,7 @@ def get_layer_tensor(layer: torch.nn.Linear | tf.keras.layers.Dense) -> list[lis
 
 def get_layer_biases(layer: torch.nn.Linear | tf.keras.layers.Dense) -> list[float]:
     """
-    Extracts the biases from a linear layer of a PyTorch or a dene layer of a TensorFlow model.
+    Extracts the biases from a linear layer of a PyTorch or a dense layer of a TensorFlow model.
 
     The provided biases are the biases of the layer's linear/dense layer.
 
@@ -65,7 +65,7 @@ def layers(model: tf.keras.Model, layer_type=None) -> Iterator[Any]:
     :param layer_type: Type of the layer to extract
     :return: List of layers of the specified type
     """
-    for layer in model.layers:
+    for layer in model.layers_list:
         if layer_type is None or isinstance(layer, layer_type):
             yield layer
 
@@ -186,3 +186,53 @@ def apply_to_tensors(model: torch.nn.Module | tf.keras.Model,
         for layer, bias in enumerate(biases(model), 1):
             for i, b in enumerate(bias):
                 bias_proc(b, layer, i)
+
+
+def set_weights_on_layer(layer: torch.nn.Linear | tf.keras.layers.Dense,
+                         weights: list[list[float]],
+                         biases: list[float]):
+    """
+    Sets the weights and biases of a PyTorch or TensorFlow linear/dense layer.
+
+    :param layer: PyTorch (torch.nn.Linear) or TensorFlow (tf.keras.layers.Dense) layer
+    :param weights: List of lists representing the weight matrix
+    :param biases: List representing the bias vector
+    """
+    if len(get_layer_tensor(layer)) != len(weights) or len(get_layer_tensor(layer)[0]) != len(weights[0]):
+        raise ValueError("The provided weights have a different shape than the layer's weight matrix.")
+    if len(get_layer_biases(layer)) != len(biases):
+        raise ValueError("The provided biases have a different shape than the layer's bias vector.")
+
+    if isinstance(layer, torch.nn.Linear):
+        with torch.no_grad():
+            layer.weight = torch.nn.Parameter(torch.tensor(weights, dtype=torch.float32).transpose(0, 1))
+            layer.bias = torch.nn.Parameter(torch.tensor(biases, dtype=torch.float32))
+    elif isinstance(layer, tf.keras.layers.Dense):
+        layer.set_weights([
+            tf.convert_to_tensor(weights, dtype=tf.float32),
+            tf.convert_to_tensor(biases, dtype=tf.float32)
+        ])
+
+
+@dispatch(torch.nn.Module)
+def clone_model(model: torch.nn.Module) -> torch.nn.Module:
+    """
+    Clones a PyTorch, including its architecture and weights.
+
+    :param model: PyTorch model
+    :return: the cloned model
+    """
+    return copy.deepcopy(model)
+
+
+@dispatch(tf.keras.Model)
+def clone_model(model: tf.keras.Model) -> tf.keras.Model:
+    """
+    Clones a TensorFlow model, including its architecture and weights.
+
+    :param model: TensorFlow model
+    :return: the cloned model
+    """
+    copy = tf.keras.models.clone_model(model)
+    copy.set_weights(model.get_weights())
+    return copy
