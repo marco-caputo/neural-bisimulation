@@ -1,8 +1,8 @@
-from typing import List, Tuple, Any, Callable
+from typing import List, Tuple
 
 from z3 import *
-import tensorflow as tf
-import torch
+
+from .SMTUtils import get_float_formula_satisfiability
 from NNToGraph import *
 
 
@@ -31,38 +31,22 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torc
         raise ValueError(f"Expected models with the same output dimension, but got {output_dim(model1)} and {output_dim(model2)}")
 
     # Encode the input-output relation of the two models into SMT formulas
-    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1)
-    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2)
+    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, var_prefix="m1_")
+    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, var_prefix="m2_")
 
     # Build the strict equivalence formula
     inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
-    outputs_equivalence = And([outputs1[i] == outputs2[i] for i in range(len(outputs2))])
-    formula = Exists([*inputs1], And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence)))
+    outputs_equivalence = And([outputs1[i] == outputs2[i] for i in range(len(outputs1))])
+    formula = And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence))
 
     # Check if the two formulas are equivalent
-    return _get_formula_satisfiability(formula, inputs1)
+    satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
+    return not satisfiability, input_values
 
-def _get_formula_satisfiability(formula: BoolRef, inputs: List[Real]) -> Tuple[bool, List[float] | None]:
-    """
-    Checks the satisfiability of a Z3 formula involving the given list of real variables as inputs and returns a
-    counterexample if the formula is satisfiable.
 
-    :param formula: A Z3 formula
-    :param inputs: A list of Z3 real variables involved in the formula
-    :return: A tuple containing a boolean indicating if the formula is satisfiable and a counterexample if it is
-    """
-    s = Solver()
-    s.add(formula)
-    result = s.check()
-    if result == sat:
-        model = s.model()
-        return False, [model.evaluate(x).as_decimal(5) for x in inputs]
-    elif result == unsat:
-        return True, None
-    else:
-        raise RuntimeError("Solver returned 'unknown'. The equivalence might be too complex to decide.")
-
-def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model, input_bounds: List[Tuple[float, float]] = None) \
+def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
+                            input_bounds: List[Tuple[float, float]] = None,
+                            var_prefix: str = "") \
         -> Tuple[BoolRef, list[Real], list[Real]]:
     """
     Converts a feed-forward model into a SMT Formula representing its input-output relation.
@@ -97,18 +81,20 @@ def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model, input_bound
     :param model: a PyTorch or TensorFlow model
     :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] specifying the inclusive lower and upper bounds
                       for each input variable.
+    :param: var_prefix: A prefix to add to the names of the variables in the produced SMT formula
     :return: An SMT Formula representing the input-output relation of the model and the lists of input and output variables
     """
     constraints = []
 
     # Encode input variables and constraints
     inputs = []
-    if len(input_bounds) != input_dim(model):
-        raise ValueError(f"Expected {input_dim(model)} input bounds, but got {len(input_bounds)}")
     if input_bounds is None:
         input_bounds = [(float('-inf'), float('inf'))] * input_dim(model)
+    if len(input_bounds) != input_dim(model):
+        raise ValueError(f"Expected {input_dim(model)} input bounds, but got {len(input_bounds)}")
+
     for i, (l, u) in enumerate(input_bounds):
-        x = Real(f'x{i}')  # Define a Z3 variable for each input
+        x = Real(f'{var_prefix}x{i}')  # Define a Z3 variable for each input
         inputs.append(x)
         bounds = []
         if l is not None and l != float('-inf'): bounds.append(l <= x)
@@ -126,21 +112,22 @@ def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model, input_bound
             bs = l_params["biases"]
 
             for j in range(len(ws[0])):
-                z = Real(f'z{l_idx}_{j}')
-                affine_expr = Sum([current_layer[k] * ws[j][k] for k in range(len(ws))]) + bs[j]
+                z = Real(f'{var_prefix}z{l_idx}_{j}')
+                affine_expr = Sum([current_layer[k] * ws[k][j] for k in range(len(ws))]) + bs[j]
                 constraints.append(simplify(z == affine_expr))
                 next_layer.append(z)
 
-            if isinstance(model, tf.keras.Model) and layer.activation is not None: # Add activation function as a layer
+            if (isinstance(model, tf.keras.Model) and layer.activation is not None and
+                    layer.activation != tf.keras.activations.linear): # Add activation function as a layer
                 l_type, l_params = _get_layer_info(_to_layer(layer.activation))
                 for j, z in enumerate(next_layer):
-                    h = Real(f'h{l_idx}_{j}')
+                    h = Real(f'{var_prefix}h{l_idx}_{j}')
                     constraints.append(simplify(h == _activation_function_formula(l_type, l_params, z)))
                     next_layer[j] = h
 
         else:
             for j, z in enumerate(current_layer):
-                h = Real(f'h{l_idx}_{j}')
+                h = Real(f'{var_prefix}h{l_idx}_{j}')
                 constraints.append(simplify(h == _activation_function_formula(l_type, l_params, z)))
                 next_layer.append(h)
 
@@ -189,21 +176,21 @@ def _get_layer_info(layer: Any) -> Tuple[str, dict[str, Any]]:
     if l_type in AFFINE_TRANS_LAYER_TYPES:
         return "AffineTrans", {"tensor": get_layer_tensor(layer), "biases": get_layer_biases(layer)}
 
-    if l_type in [torch.nn.ReLU, torch.nn.LeakyReLU, torch.nn.ReLU6, tf.keras.layers.ReLU, tf.keras.layers.LeakyRelu] or \
+    if l_type in [torch.nn.ReLU, torch.nn.LeakyReLU, torch.nn.ReLU6, tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU] or \
             (l_type == tf.keras.layers.Activation and layer.activation in
              [tf.keras.activations.relu, tf.keras.activations.leaky_relu, tf.keras.activations.relu6]):
-        max_val = layer.max_val if l_type == tf.keras.layers.ReLU else \
-            layer.activation.max_val if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu else \
+        max_val = layer.max_value if l_type == tf.keras.layers.ReLU else \
+            layer.activation.max_value if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu else \
                 6 if l_type == torch.nn.ReLU6 or (
-                            l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu6) else \
-                    float("inf")
+                            l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu6) \
+                    else None
 
         threshold = layer.threshold if l_type in [tf.keras.layers.ReLU] else \
             layer.activation.threshold if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu else \
                 0.0
 
         negative_slope = layer.negative_slope if l_type in [torch.nn.LeakyReLU, tf.keras.layers.ReLU,
-                                                            tf.keras.layers.LeakyRelu] else \
+                                                            tf.keras.layers.LeakyReLU] else \
             layer.activation.negative_slope if l_type == tf.keras.layers.Activation else \
                 0.0
 
@@ -240,8 +227,8 @@ def _to_layer(activation: Callable) -> Any:
     :param activation: The activation function
     :return: The corresponding layer
     """
-    if type(activation) in [tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU,
-                            tf.keras.layers.ReLU6, tf.keras.layers.Activation]:
+    print(activation)
+    if type(activation) in [tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU, tf.keras.layers.Activation]:
         return activation
 
     if activation == tf.keras.activations.relu:
@@ -270,9 +257,9 @@ def _activation_function_formula(type: str, p: dict[str, Any], z: Real) -> BoolR
     :return: The SMT formula representing the activation function
     """
     if type == "ReLU":  # h_j = min(max_val, z_j) if z_j >= threshold, negative_slope * (z_j - threshold) otherwise
-        return If(z >= p["max_val"], p["max_val"],
-                  If(z >= p["threshold"], z,
-                     p["negative_slope"] * (z - p["threshold"])))
+        formula = If(z >= p["threshold"], z, p["negative_slope"] * (z - p["threshold"]))
+        if p["max_val"] is not None: formula = If(z >= p["max_val"], p["max_val"], formula)
+        return formula
 
     if type == "HardSigmoid":  # h_j = max(0, min(1, z_j / 6 + 0.5))
         return If(z <= -3, 0,

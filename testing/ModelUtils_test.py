@@ -104,7 +104,7 @@ class ModelUtilsTest(unittest.TestCase):
         self.assertEqual(len(get_layer_tensor(ls[3])[0]), 9)
 
     def test_get_layer_tensor_values_torch_1(self):
-        model = copy.deepcopy(TORCH_MODEL_1)
+        model = clone_model(TORCH_MODEL_1)
         set_weights_on_layer(model.layers_list[0], [[0.1], [0.2]], [0.3])
         ls = list(layers(model, layer_type=torch.nn.Linear))
         self.assertFloatsEqual(get_layer_tensor(ls[0])[0][0], 0.1)
