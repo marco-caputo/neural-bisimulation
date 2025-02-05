@@ -6,11 +6,15 @@ from .SMTUtils import get_float_formula_satisfiability
 from NNToGraph import *
 
 
-def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torch.nn.Module | tf.keras.Model) \
+def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
+                          model2: torch.nn.Module | tf.keras.Model,
+                          input_bounds: List[Tuple[float, float]] = None,
+                          epsilon: float = 1e-6) \
         -> Tuple[bool, List[float] | None]:
     """
     Checks if two feed-forward models are strictly equivalent.
-    Two models are strictly equivalent if for every possible input, they produce the same exact output.
+    Two models are strictly equivalent if for every possible input, they produce the same output (within a given epsilon
+    tolerance due to floating-point arithmetic).
     The equivalence is checked by proving the unsatisfiability of the formula that represents the negation of the
     equivalence between each of the two models output variables.
     Besides the boolean value representing the equivalence, if the two models are not strictly equivalent, a
@@ -20,8 +24,20 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torc
     Note that, in order to check the equivalence, the input and the output dimensions of the two models must be the
     same, otherwise an exception is raised.
 
+    Due to arithmetic errors, it is strongly recommended to provide input bounds to the method, in order to limit the
+    impact of such arithmetic errors for very high input values, which could bring to consistent discrepancies in
+    the output values. In fact, arithmetic errors and unlimited search space of the counterexample can easily bring
+    to a satisfiable formula, even if the two models are strictly equivalent.
+
+    Low values of the epsilon parameter should be combined to tight input bounds to ensure the correctness of the
+    equivalence check. For instance, the default epsilon of 1e-6 is recommended for models with input bounds in the
+    range [-1, 1] or [0, 1].
+
     :param model1: The first model
     :param model2: The second model
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] specifying the inclusive lower and upper bounds
+                        for each input variable of the models. If not provided, the bounds are set to (-inf, inf).
+    :param epsilon: The tolerance for the equivalence check due to floating-point arithmetic
     :return: a tuple containing a boolean indicating if the two models are strictly equivalent and a counterexample
      if they are not
     """
@@ -31,12 +47,13 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model, model2: torc
         raise ValueError(f"Expected models with the same output dimension, but got {output_dim(model1)} and {output_dim(model2)}")
 
     # Encode the input-output relation of the two models into SMT formulas
-    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, var_prefix="m1_")
-    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, var_prefix="m2_")
+    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
+    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
 
     # Build the strict equivalence formula
     inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
-    outputs_equivalence = And([outputs1[i] == outputs2[i] for i in range(len(outputs1))])
+
+    outputs_equivalence = And([Abs(outputs1[i] - outputs2[i]) < epsilon for i in range(len(outputs1))])
     formula = And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence))
 
     # Check if the two formulas are equivalent
