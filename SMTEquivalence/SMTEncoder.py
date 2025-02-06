@@ -64,7 +64,7 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
     outputs_equivalence = And([Abs(outputs1[i] - outputs2[i]) < epsilon for i in range(len(outputs1))])
     formula = And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence))
 
-    # Check if the two formulas are equivalent
+    # Check if the formula is satisfiable (i.e., the two models are not strictly equivalent)
     satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
     return not satisfiability, input_values
 
@@ -119,10 +119,55 @@ def are_approximate_equivalent(model1: torch.nn.Module | tf.keras.Model,
     outputs_distance = (Sum([Abs(outputs1[i] - outputs2[i])**p for i in range(len(outputs1))])**(1/p)) >= epsilon
     formula = And(inputs_equivalence, formula1, formula2, outputs_distance)
 
-    # Check if the two formulas are equivalent
+    # Check if the formula is satisfiable (i.e., the two models are not (p, epsilon)-approximately equivalent)
     satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
     return not satisfiability, input_values
 
+
+def _argmaxis_formula(out_array: Array, i: Int, m: int) -> BoolRef:
+    """
+    Returns the formula that represents the argmaxis function of the given outuput vector, which is true
+    if the i-th element of the output vector is the maximum element of the vector.
+
+    :param out_array: The output vector as a Z3 array
+    :param i: The index of the element to check
+    :param m: The size of the output vector
+    """
+    return And([Or(And(j<i, out_array[i] > out_array[j]), And(i<=j, out_array[i] >= out_array[j]))
+                for j in range(m)])
+
+def are_argmax_equivalent(model1: torch.nn.Module | tf.keras.Model,
+                          model2: torch.nn.Module | tf.keras.Model,
+                          input_bounds: List[Tuple[float, float]] = None):
+    """
+    Checks if two feed-forward models are argmax equivalent.
+    """
+    # Check if the input and output dimensions of the two models are the same
+    _check_models_dimensions(model1, model2)
+
+    # Encode the input-output relation of the two models into SMT formulas
+    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
+    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
+
+    # Build the argmax equivalence formula
+    out_array_1, out_array_2 = Array('out1', IntSort(), RealSort()), Array('out2', IntSort(), RealSort())
+    inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
+
+    out_array_equivalence = And([out_array_1[i] == outputs1[i] for i in range(len(outputs1))] +
+                                [out_array_2[i] == outputs2[i] for i in range(len(outputs2))])
+    i1, i2, m = Int('i1'), Int('i2'), len(outputs1)
+    i_constraints = And([i1 >= 0, i1 < m, i2 >= 0, i2 < m])
+    different_argmax = And(out_array_equivalence,
+                           i_constraints,
+                           _argmaxis_formula(out_array_1, i1, m),
+                           _argmaxis_formula(out_array_2, i2, m),
+                           i1 != i2)
+
+    formula = And(inputs_equivalence, formula1, formula2, different_argmax)
+
+    # Check if the formula is satisfiable (i.e., the two models are not argmax equivalent)
+    satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
+    return not satisfiability, input_values
 
 
 def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,

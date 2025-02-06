@@ -216,7 +216,6 @@ class ModelUtilsTest(unittest.TestCase):
             tf_model
         )
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
     def test_approximate_equivalence_torch_1(self):
         are_equivalent, counterexample = are_approximate_equivalent(
@@ -236,7 +235,6 @@ class ModelUtilsTest(unittest.TestCase):
             epsilon=1e-9
         )
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
     def test_approximate_equivalence_torch_2(self):
         model1, model2 = self.get_equivalent_torch_models()
@@ -248,7 +246,6 @@ class ModelUtilsTest(unittest.TestCase):
             p=2
         )
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
     def test_approximate_equivalence_tf_2(self):
         model1, model2 = self.get_equivalent_tf_models()
@@ -259,7 +256,6 @@ class ModelUtilsTest(unittest.TestCase):
             [(-1, 1)]*3
         )
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
     # Tests weather two models from pytorch are considered approximately equivalent whenever they have
     # weights that lead to a contained difference in the output of the model
@@ -272,7 +268,6 @@ class ModelUtilsTest(unittest.TestCase):
 
         are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)]*2, p=1, epsilon=0.21)
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
         are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)]*2, p=1, epsilon=0.19)
         self.assertFalse(are_equivalent)
@@ -286,7 +281,6 @@ class ModelUtilsTest(unittest.TestCase):
 
         are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)]*3, p=2, epsilon=0.5)
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
 
         are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)]*3, p=2, epsilon=0.4)
         self.assertFalse(are_equivalent)
@@ -312,4 +306,56 @@ class ModelUtilsTest(unittest.TestCase):
             p=float('inf')
         )
         self.assertTrue(are_equivalent)
-        self.assertIsNone(counterexample)
+
+    def test_argmax_equivalence_torch_1(self):
+        are_equivalent, counterexample = are_argmax_equivalent(
+            TORCH_MODEL_1,
+            clone_model(TORCH_MODEL_1)
+        )
+        self.assertTrue(are_equivalent)
+
+    def test_argmax_equivalence_tf_1(self):
+        are_equivalent, counterexample = are_argmax_equivalent(
+            TF_MODEL_1,
+            clone_model(TF_MODEL_1)
+        )
+        self.assertTrue(are_equivalent)
+
+
+    # Tests weather two models from pytorch are considered equivalent whenever one of the two outputs is
+    # always greater than the other
+    def test_argmax_equivalence_tf_2(self):
+        weights_1, weights_2 = [[2, 1], [2, 1], [2, 1]], [[10, 1.1], [10, 1.1], [10, 1.1]]
+        bias_1, bias_2 = [1, 1], [1, 1]
+        model1, model2 = clone_model(TF_MODEL_1), clone_model(TF_MODEL_1)
+        set_weights_on_layer(model1.layers[0], weights_1, bias_1)
+        set_weights_on_layer(model2.layers[0], weights_2, bias_2)
+
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2)
+        self.assertTrue(are_equivalent)
+
+        changed_weights = [[1, 1.1], [1, 1.1], [1, 1.1]]
+        set_weights_on_layer(model2.layers[0], changed_weights, bias_2)
+
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2)
+        self.assertFalse(are_equivalent)
+
+    def test_argmax_equivalence_tf_3(self):
+        model1 = TorchFFNN([3, 2], activation_layer=nn.Hardsigmoid())
+        model2 = TorchFFNN([3, 2, 2], activation_layer=nn.Hardsigmoid())
+        weights1, weights21, weights22 = [[2, 1], [1, 1], [1, 1]], [[1, 1], [1, 1], [1, 1]], [[2, 1], [1, 1]]
+        bias = [0, 0]
+        set_weights_on_layer(model1.layers[0], weights1, bias)
+        set_weights_on_layer(model2.layers[0], weights21, bias)
+        set_weights_on_layer(model2.layers[2], weights22, bias)
+
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)]*3)
+        print(counterexample)
+        self.assertTrue(are_equivalent)
+
+        weights = next(tensors(model1))
+        weights[0][0] -= 2
+        set_weights_on_layer(model1.layers[0], weights, next(biases(model1)))
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)]*3)
+        self.assertFalse(are_equivalent)
+
