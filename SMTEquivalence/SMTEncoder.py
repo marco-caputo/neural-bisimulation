@@ -6,6 +6,16 @@ from .SMTUtils import get_float_formula_satisfiability
 from NNToGraph import *
 
 
+#Checks if the input and output dimensions of the two models are the same.
+#If the dimensions are different, a ValueError is raised.
+def _check_models_dimensions(model1: torch.nn.Module | tf.keras.Model,
+                             model2: torch.nn.Module | tf.keras.Model):
+    if input_dim(model1) != input_dim(model2):
+        raise ValueError(f"Expected models with the same input dimension, but got {input_dim(model1)} and {input_dim(model2)}")
+    if output_dim(model1) != output_dim(model2):
+        raise ValueError(f"Expected models with the same output dimension, but got {output_dim(model1)} and {output_dim(model2)}")
+
+
 def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
                           model2: torch.nn.Module | tf.keras.Model,
                           input_bounds: List[Tuple[float, float]] = None,
@@ -15,6 +25,7 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
     Checks if two feed-forward models are strictly equivalent.
     Two models are strictly equivalent if for every possible input, they produce the same output (within a given epsilon
     tolerance due to floating-point arithmetic).
+
     The equivalence is checked by proving the unsatisfiability of the formula that represents the negation of the
     equivalence between each of the two models output variables.
     Besides the boolean value representing the equivalence, if the two models are not strictly equivalent, a
@@ -41,10 +52,8 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
     :return: a tuple containing a boolean indicating if the two models are strictly equivalent and a counterexample
      if they are not
     """
-    if input_dim(model1) != input_dim(model2):
-        raise ValueError(f"Expected models with the same input dimension, but got {input_dim(model1)} and {input_dim(model2)}")
-    if output_dim(model1) != output_dim(model2):
-        raise ValueError(f"Expected models with the same output dimension, but got {output_dim(model1)} and {output_dim(model2)}")
+    # Check if the input and output dimensions of the two models are the same
+    _check_models_dimensions(model1, model2)
 
     # Encode the input-output relation of the two models into SMT formulas
     formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
@@ -52,13 +61,68 @@ def are_strict_equivalent(model1: torch.nn.Module | tf.keras.Model,
 
     # Build the strict equivalence formula
     inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
-
     outputs_equivalence = And([Abs(outputs1[i] - outputs2[i]) < epsilon for i in range(len(outputs1))])
     formula = And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence))
 
     # Check if the two formulas are equivalent
     satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
     return not satisfiability, input_values
+
+
+def are_approximate_equivalent(model1: torch.nn.Module | tf.keras.Model,
+                               model2: torch.nn.Module | tf.keras.Model,
+                               input_bounds: List[Tuple[float, float]] = None,
+                               p: float = 1,
+                               epsilon: float = 1e-6):
+    """
+    Checks if two feed-forward models are (p, epsilon)-approximately equivalent.
+    Given two real values p and epsilon, two models are (p, epsilon)-approximately equivalent if for every possible
+    input, the p-norm of the difference between their output vectors is less than epsilon.
+
+    Note that, based on the value of p, the (p, epsilon)-approximate equivalence uses different distance metrics:
+    - For p = 1, the (1, epsilon)-approximate equivalence uses the Manhattan distance;
+    - For p = 2, the (2, epsilon)-approximate equivalence uses the Euclidean distance;
+    - For p = float('inf'), the (inf, epsilon)-approximate equivalence uses the Maximum distance, and hence
+        the equivalence check is performed equivalently to the strict equivalence check for the given epsilon.
+
+    The equivalence is checked by proving the unsatisfiability of the formula that represents the negation of the
+    nearness between each of the two models output vectors.
+    Besides the boolean value representing the equivalence, if the two models are not (p, epsilon)-approximately
+    equivalent, a counterexample consisting in a list of input values that produce distant output vectors is returned,
+    otherwise None is returned.
+
+    Note that, in order to check the equivalence, the input and the output dimensions of the two models must be the
+    same, otherwise an exception is raised.
+
+    :param model1: The first model
+    :param model2: The second model
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] specifying the inclusive lower and upper bounds
+                        for each input variable of the models. If not provided, the bounds are set to (-inf, inf).
+    :param p: The norm to use for the distance metric
+    :param epsilon: The tolerance for the approximate equivalence check
+    :return: a tuple containing a boolean indicating if the two models are (p, epsilon)-approximately equivalent and a
+     counterexample if they are not
+    """
+
+    if p == float('inf'):
+        return are_strict_equivalent(model1, model2, input_bounds, epsilon)
+
+    # Check if the input and output dimensions of the two models are the same
+    _check_models_dimensions(model1, model2)
+
+    # Encode the input-output relation of the two models into SMT formulas
+    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
+    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
+
+    # Build the approximate equivalence formula
+    inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
+    outputs_distance = (Sum([Abs(outputs1[i] - outputs2[i])**p for i in range(len(outputs1))])**(1/p)) >= epsilon
+    formula = And(inputs_equivalence, formula1, formula2, outputs_distance)
+
+    # Check if the two formulas are equivalent
+    satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
+    return not satisfiability, input_values
+
 
 
 def encode_into_SMT_formula(model: torch.nn.Module | tf.keras.Model,
@@ -195,21 +259,20 @@ def _get_layer_info(layer: Any) -> Tuple[str, dict[str, Any]]:
 
     if l_type in [torch.nn.ReLU, torch.nn.LeakyReLU, torch.nn.ReLU6, tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU] or \
             (l_type == tf.keras.layers.Activation and layer.activation in
-             [tf.keras.activations.relu, tf.keras.activations.leaky_relu, tf.keras.activations.relu6]):
-        max_val = layer.max_value if l_type == tf.keras.layers.ReLU else \
-            layer.activation.max_value if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu else \
-                6 if l_type == torch.nn.ReLU6 or (
-                            l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu6) \
-                    else None
+             [tf.keras.activations.relu, tf.keras.activations.relu6]):
 
-        threshold = layer.threshold if l_type in [tf.keras.layers.ReLU] else \
-            layer.activation.threshold if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu else \
-                0.0
+        max_val = \
+            layer.max_value if l_type == tf.keras.layers.ReLU else (
+            6 if l_type == torch.nn.ReLU6 or (
+                    l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.relu6) else
+            None )
 
-        negative_slope = layer.negative_slope if l_type in [torch.nn.LeakyReLU, tf.keras.layers.ReLU,
-                                                            tf.keras.layers.LeakyReLU] else \
-            layer.activation.negative_slope if l_type == tf.keras.layers.Activation else \
-                0.0
+        threshold = layer.threshold if l_type in [tf.keras.layers.ReLU] else 0.0
+
+        negative_slope = \
+            layer.negative_slope if l_type in [torch.nn.LeakyReLU, tf.keras.layers.ReLU,tf.keras.layers.LeakyReLU] else (
+            0.2 if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.leaky_relu else
+            0.0 )
 
         return "ReLU", {"max_val": max_val, "threshold": threshold, "negative_slope": negative_slope}
 

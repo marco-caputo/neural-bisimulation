@@ -65,7 +65,7 @@ def layers(model: tf.keras.Model, layer_type=None) -> Iterator[Any]:
     :param layer_type: Type of the layer to extract
     :return: List of layers of the specified type
     """
-    for layer in model.layers_list:
+    for layer in model.layers:
         if layer_type is None or isinstance(layer, layer_type):
             yield layer
 

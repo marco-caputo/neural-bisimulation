@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn as nn
 import tensorflow as tf
@@ -8,39 +10,47 @@ class TorchFFNN(torch.nn.Module):
     A simple feedforward neural network in PyTorch with ReLU activation functions.
     """
 
-    def __init__(self, layers_dim: List[int], activations_as_layers: bool = True):
+    def __init__(self, layers_dim: List[int],
+                 activations_as_layers: bool = True,
+                 activation_layer: nn.Module = nn.ReLU()):
         """
         Initializes a simple feedforward neural network in PyTorch with ReLU activation functions.
 
         :param layers_dim: List of integers representing the number of neurons in each linear layer.
         :param activations_as_layers: specifies if activation functions should be defined as layers. Defaults to True.
+        :param activation_layer: Activation function to use, in form of a layer. Defaults to ReLU.
         """
         super().__init__()
-        self.layers_list = nn.ModuleList()
+        self.layers = nn.ModuleList()
         self.activations_as_layers = activations_as_layers
         for i in range(len(layers_dim) - 1):
             if self.activations_as_layers:
-                self.layers_list.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
+                self.layers.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
                 if i < len(layers_dim) - 2:
-                    self.layers_list.append(nn.ReLU())
+                    self.layers.append(activation_layer)
             else:
-                self.layers_list.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
+                self.layers.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
 
     def forward(self, x):
-        for layer in self.layers_list: x = layer(x) if self.activations_as_layers else torch.relu(layer(x))
+        for layer in self.layers: x = layer(x) if self.activations_as_layers else torch.relu(layer(x))
         return x
+
 
 class TensorFlowFFNN(tf.keras.Model):
     """
     A simple feedforward neural network in TensorFlow with ReLU activation functions
     """
 
-    def __init__(self, layers_dim: List[int],  activations_as_layers: bool = True, **kwargs):
+    def __init__(self, layers_dim: List[int],
+                 activations_as_layers: bool = True,
+                 activation_layer: tf.keras.layers.Layer = tf.keras.layers.ReLU(),
+                 **kwargs):
         """
         Initializes a simple feedforward neural network in TensorFlow with ReLU activation functions.
 
         :param layers_dim: List of integers representing the number of neurons in each dense layer.
         :param activations_as_layers: specifies if activation functions should be defined as layers. Defaults to True.
+        :param activation_layer: Activation function to use, in form of a layer. Defaults to ReLU.
         """
         super(TensorFlowFFNN, self).__init__(**kwargs)
         self.layers_dim = layers_dim
@@ -51,7 +61,7 @@ class TensorFlowFFNN(tf.keras.Model):
             if self.activations_as_layers:
                 self.layers_list.append(tf.keras.layers.Dense(layers_dim[i], activation=None))
                 if i < len(layers_dim) - 1:
-                    self.layers_list.append(tf.keras.layers.ReLU())
+                    self.layers_list.append(copy.deepcopy(activation_layer))
             else:
                 self.layers_list.append(tf.keras.layers.Dense(layers_dim[i], activation='relu'))
 

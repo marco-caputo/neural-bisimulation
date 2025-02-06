@@ -45,6 +45,7 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_layers_tf_2(self):
         ls = list(layers(TF_MODEL_2))
+        print(ls)
         self.assertEqual(len(ls), 7)
         self.assertTrue(type(ls[2]) == tf.keras.layers.Dense)
         self.assertTrue(type(ls[3]) == tf.keras.layers.ReLU)
@@ -105,14 +106,14 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_get_layer_tensor_values_torch_1(self):
         model = clone_model(TORCH_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1], [0.2]], [0.3])
+        set_weights_on_layer(model.layers[0], [[0.1], [0.2]], [0.3])
         ls = list(layers(model, layer_type=torch.nn.Linear))
         self.assertFloatsEqual(get_layer_tensor(ls[0])[0][0], 0.1)
         self.assertFloatsEqual(get_layer_tensor(ls[0])[1][0], 0.2)
 
     def test_get_layer_tensor_values_torch_2(self):
         model = clone_model(TORCH_MODEL_2)
-        set_weights_on_layer(model.layers_list[0],
+        set_weights_on_layer(model.layers[0],
                              [[0.1]*12, [0.2]*12, [0.3]*12, [0.4]*12, [0.5]*12, [0.6]*12, [0.7]*12, [0.8]*12, [0.9]*12, [1.0]*12],
                              [0.1]*12)
         ls = list(layers(model, layer_type=torch.nn.Linear))
@@ -121,7 +122,7 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_get_layer_tensor_values_tf_1(self):
         model = clone_model(TF_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], [0.7, 0.8])
+        set_weights_on_layer(model.layers[0], [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], [0.7, 0.8])
         ls = list(layers(model, layer_type=tf.keras.layers.Dense))
         self.assertFloatsEqual(get_layer_tensor(ls[0])[0][1], 0.2)
         self.assertFloatsEqual(get_layer_tensor(ls[0])[2][1], 0.6)
@@ -136,25 +137,25 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_get_layer_biases_torch_1(self):
         model = clone_model(TORCH_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1], [0.1]], [0.3])
+        set_weights_on_layer(model.layers[0], [[0.1], [0.1]], [0.3])
         ls = list(layers(model, layer_type=torch.nn.Linear))
         self.assertFloatsEqual(get_layer_biases(ls[0])[0], 0.3)
 
     def test_get_layer_biases_tf_1(self):
         model = clone_model(TF_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1, 0.1], [0.1, 0.1], [0.1, 0.1]], [0.7, 0.7])
+        set_weights_on_layer(model.layers[0], [[0.1, 0.1], [0.1, 0.1], [0.1, 0.1]], [0.7, 0.7])
         ls = list(layers(model, layer_type=tf.keras.layers.Dense))
         self.assertFloatsEqual(get_layer_biases(ls[0])[1], 0.7)
 
     def test_apply_to_tensors_torch_1(self):
         model = clone_model(TORCH_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1], [0.1]], [0.3])
+        set_weights_on_layer(model.layers[0], [[0.1], [0.1]], [0.3])
         apply_to_tensors(model, weight_proc=lambda w, i, j, k: self.assertFloatsEqual(w, 0.1),
                          bias_proc=lambda b, i, j: self.assertFloatsEqual(b, 0.3))
 
     def test_apply_to_tensors_torch_2(self):
         model = clone_model(TORCH_MODEL_2)
-        set_weights_on_layer(model.layers_list[0],
+        set_weights_on_layer(model.layers[0],
                              [[0.1] * 12, [0.2] * 12, [0.3] * 12, [0.4] * 12, [0.5] * 12, [0.6] * 12, [0.7] * 12,
                               [0.8] * 12, [0.9] * 12, [1.0] * 12],
                              [0.1] * 12)
@@ -177,7 +178,7 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_apply_to_tensors_tf_1(self):
         model = clone_model(TF_MODEL_1)
-        set_weights_on_layer(model.layers_list[0], [[0.1, 0.1], [0.1, 0.1], [0.1, 0.1]], [0.7, 0.7])
+        set_weights_on_layer(model.layers[0], [[0.1, 0.1], [0.1, 0.1], [0.1, 0.1]], [0.7, 0.7])
         apply_to_tensors(model, weight_proc=lambda w, i, j, k: self.assertFloatsEqual(w, 0.1),
                          bias_proc=lambda b, i, j: self.assertFloatsEqual(b, 0.7))
 

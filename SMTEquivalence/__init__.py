@@ -1,5 +1,6 @@
 from .SMTEncoder import (
     are_strict_equivalent,
+    are_approximate_equivalent,
     encode_into_SMT_formula
 )
 
