@@ -1,7 +1,7 @@
 import unittest
 from typing import List, Tuple
 
-from NNToGraph import *
+from NeuralNetworks import *
 
 TORCH_MODEL_1 = TorchFFNN([2, 1])
 TORCH_MODEL_2 = TorchFFNN([10, 12, 14, 7])

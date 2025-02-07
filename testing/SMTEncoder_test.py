@@ -1,7 +1,7 @@
 import unittest
 
 from z3 import *
-from NNToGraph import *
+from NeuralNetworks import *
 from SMTEquivalence import *
 import torch.nn as nn
 

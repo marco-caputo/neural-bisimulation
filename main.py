@@ -2,7 +2,7 @@ import bispy as bp
 import networkx as nx
 from z3 import *
 
-from NNToGraph import create_graph, visualize_model_graph, TensorFlowFFNN, TorchFFNN
+from NeuralNetworks import create_graph, visualize_model_graph, TensorFlowFFNN, TorchFFNN
 
 
 def bisimulation_test():

@@ -1,5 +1,5 @@
 from z3 import *
-from NNToGraph import *
+from NeuralNetworks import *
 
 
 def main():

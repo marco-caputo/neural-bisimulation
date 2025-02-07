@@ -3,7 +3,7 @@ from typing import List, Tuple
 from z3 import *
 
 from .SMTUtils import get_float_formula_satisfiability
-from NNToGraph import *
+from NeuralNetworks import *
 
 
 #Checks if the input and output dimensions of the two models are the same.
