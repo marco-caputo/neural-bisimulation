@@ -1,6 +1,7 @@
 import unittest
 from typing import List, Tuple
 
+from Testing import TorchFFNN, TensorFlowFFNN
 from NeuralNetworks import *
 
 TORCH_MODEL_1 = TorchFFNN([2, 1])
@@ -38,7 +39,7 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_layers_tf_1(self):
         ls = list(layers(TF_MODEL_1))
-        self.assertEqual(len(ls), 1)
+        self.assertEqual(2, len(ls))
         self.assertEqual(type(ls[0]), tf.keras.layers.Dense)
 
         ls = list(layers(TF_MODEL_1, layer_type=tf.keras.layers.Dense))
@@ -46,17 +47,16 @@ class ModelUtilsTest(unittest.TestCase):
 
     def test_layers_tf_2(self):
         ls = list(layers(TF_MODEL_2))
-        print(ls)
-        self.assertEqual(len(ls), 7)
+        self.assertEqual(8, len(ls))
         self.assertTrue(type(ls[2]) == tf.keras.layers.Dense)
         self.assertTrue(type(ls[3]) == tf.keras.layers.ReLU)
 
         ls = list(layers(TF_MODEL_2, layer_type=tf.keras.layers.Dense))
-        self.assertEqual(len(ls), 4)
+        self.assertEqual(4, len(ls))
         self.assertTrue(all([type(l) == tf.keras.layers.Dense for l in ls]))
 
         ls = list(layers(TF_MODEL_2, layer_type=tf.keras.layers.ReLU))
-        self.assertEqual(len(ls), 3)
+        self.assertEqual(3, len(ls))
         self.assertTrue(all([type(l) == tf.keras.layers.ReLU for l in ls]))
 
     def test_input_dim_torch_1(self):

@@ -17,7 +17,7 @@ class ReLU(ActivationFunction):
         self.negative_slope = negative_slope
 
     def apply(self, x: float) -> float:
-        if x >= self.max_val:
+        if self.max_val is not None and x >= self.max_val:
             return self.max_val
         elif x >= self.threshold:
             return x

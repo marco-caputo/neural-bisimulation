@@ -12,7 +12,7 @@ class TorchFFNN(torch.nn.Module):
 
     def __init__(self, layers_dim: List[int],
                  activations_as_layers: bool = True,
-                 activation_layer: nn.Module = nn.ReLU(),
+                 activation_layer: nn.Module = None,
                  output_activation: nn.Module = None):
         """
         Initializes a simple feedforward neural network in PyTorch with ReLU activation functions.
@@ -24,10 +24,13 @@ class TorchFFNN(torch.nn.Module):
         super().__init__()
         self.layers = nn.ModuleList()
         self.activations_as_layers = activations_as_layers
+        if activation_layer is None and activations_as_layers:
+            activation_layer = torch.nn.ReLU()
+
         for i in range(len(layers_dim) - 1):
             if self.activations_as_layers:
                 self.layers.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
-                if i < len(layers_dim) - 2:
+                if activation_layer is not None and i < len(layers_dim) - 2:
                     self.layers.append(copy.deepcopy(activation_layer))
                 elif output_activation is not None and i == len(layers_dim) - 2:
                     self.layers.append(copy.deepcopy(output_activation))

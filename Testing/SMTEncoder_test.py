@@ -1,9 +1,10 @@
 import unittest
-
 from z3 import *
+import torch.nn as nn
+
+from Testing import TorchFFNN, TensorFlowFFNN
 from NeuralNetworks import *
 from SMTEquivalence import *
-import torch.nn as nn
 
 TORCH_MODEL_1 = TorchFFNN([2, 1])
 TORCH_MODEL_2 = TorchFFNN([3, 4, 5, 2])

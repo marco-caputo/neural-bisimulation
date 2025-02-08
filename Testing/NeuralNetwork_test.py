@@ -1,4 +1,6 @@
 import unittest
+
+from Testing import TorchFFNN, TensorFlowFFNN
 from NeuralNetworks import *
 
 TORCH_MODEL_1 = TorchFFNN([2, 1])
