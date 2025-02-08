@@ -5,12 +5,11 @@ from NeuralNetworks import *
 from SMTEquivalence import *
 import torch.nn as nn
 
-import os
-
 TORCH_MODEL_1 = TorchFFNN([2, 1])
 TORCH_MODEL_2 = TorchFFNN([3, 4, 5, 2])
 TF_MODEL_1 = TensorFlowFFNN([3, 2])
 TF_MODEL_2 = TensorFlowFFNN([2, 5, 5, 3])
+
 
 class ModelUtilsTest(unittest.TestCase):
 
@@ -32,7 +31,7 @@ class ModelUtilsTest(unittest.TestCase):
         bias = [0.23, 0.14]
         set_weights_on_layer(model1.layers[0], weights, bias)
 
-        model2 = TensorFlowFFNN([3, 2, 2], activation_layer=tf.keras.layers.Identity())
+        model2 = TensorFlowFFNN([3, 2, 2], activation_func=tf.keras.layers.Identity())
         set_weights_on_layer(model2.layers[0], [[0.1, 0.2], [-0.3, 0.4], [0.5, 0.1]], [-0.5, 0.6])
         set_weights_on_layer(model2.layers[2], [[-0.1, 0.2], [0.3, 0.4]], [0, 0])
 
@@ -62,20 +61,25 @@ class ModelUtilsTest(unittest.TestCase):
         smt, inp, outp = encode_into_SMT_formula(TORCH_MODEL_1)
         weights = next(tensors(TORCH_MODEL_1))
         bias = next(biases(TORCH_MODEL_1))
-        expected_formula = weights[0][0] * inp[0] + weights[1][0] * inp[1] + bias[0] == outp[0]
+        expected_formula = And(weights[0][0] * inp[0] + weights[1][0] * inp[1] + bias[0] == outp[0],
+                               Real('z0_0') == outp[0])
         s = Solver()
+
         s.add(smt != expected_formula)
-        self.assertEqual(s.check(), unsat)
+        self.assertEqual(unsat, s.check())
 
     def test_encode_into_SMT_formula_tf(self):
         smt, inp, outp = encode_into_SMT_formula(TF_MODEL_1)
         weights = next(tensors(TF_MODEL_1))
         bias = next(biases(TF_MODEL_1))
-        expected_formula = And(weights[0][0] * inp[0] + weights[1][0] * inp[1] + weights[2][0] * inp[2] + bias[0] == outp[0],
-                               weights[0][1] * inp[0] + weights[1][1] * inp[1] + weights[2][1] * inp[2] + bias[1] == outp[1])
+        expected_formula = And(
+            weights[0][0] * inp[0] + weights[1][0] * inp[1] + weights[2][0] * inp[2] + bias[0] == outp[0],
+            weights[0][1] * inp[0] + weights[1][1] * inp[1] + weights[2][1] * inp[2] + bias[1] == outp[1],
+            Real('z0_0') == outp[0],
+            Real('z0_1') == outp[1])
         s = Solver()
         s.add(smt != expected_formula)
-        self.assertEqual(s.check(), unsat)
+        self.assertEqual(unsat, s.check())
 
     def test_encode_torch_2(self):
         smt, inp, outp = encode_into_SMT_formula(TORCH_MODEL_2)
@@ -139,14 +143,14 @@ class ModelUtilsTest(unittest.TestCase):
     def test_equivalent_models_torch_2(self):
         model1, model2 = self.get_equivalent_torch_models()
 
-        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)]*2)
+        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)] * 2)
         self.assertTrue(are_equivalent)
         self.assertIsNone(counterexample)
 
     def test_equivalent_models_tf_2(self):
         model1, model2 = self.get_equivalent_tf_models()
 
-        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)]*3)
+        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)] * 3)
         self.assertTrue(are_equivalent)
         self.assertIsNone(counterexample)
 
@@ -181,10 +185,10 @@ class ModelUtilsTest(unittest.TestCase):
     def test_non_equivalent_models_torch_2(self):
         model1, model2 = self.get_equivalent_torch_models()
         weights = next(tensors(model1))
-        weights[0][0] -= 0.1 # -2.46 instead of -2.45 for the first weight
+        weights[0][0] -= 0.1  # -2.46 instead of -2.45 for the first weight
         set_weights_on_layer(model1.layers[0], weights, next(biases(model1)))
 
-        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)]*2)
+        are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)] * 2)
         self.assertFalse(are_equivalent)
         self.assertIsNotNone(counterexample)
         self.assertEqual(len(counterexample), 2)
@@ -194,7 +198,7 @@ class ModelUtilsTest(unittest.TestCase):
     def test_non_equivalent_models_tf_2(self):
         model1, model2 = self.get_equivalent_tf_models()
         weights = next(tensors(model1))
-        weights[1][0] += 0.01 # 0.16 instead of 0.15 for the first weight
+        weights[1][0] += 0.01  # 0.16 instead of 0.15 for the first weight
         set_weights_on_layer(model1.layers[0], weights, next(biases(model1)))
 
         are_equivalent, counterexample = are_strict_equivalent(model1, model2, [(-1, 1)] * 3)
@@ -221,7 +225,7 @@ class ModelUtilsTest(unittest.TestCase):
         are_equivalent, counterexample = are_approximate_equivalent(
             TORCH_MODEL_1,
             clone_model(TORCH_MODEL_1),
-            [(-1, 1)]*2
+            [(-1, 1)] * 2
         )
         self.assertTrue(are_equivalent)
         self.assertIsNone(counterexample)
@@ -230,7 +234,7 @@ class ModelUtilsTest(unittest.TestCase):
         are_equivalent, counterexample = are_approximate_equivalent(
             TF_MODEL_1,
             clone_model(TF_MODEL_1),
-            [(-1, 1)]*3,
+            [(-1, 1)] * 3,
             p=2,
             epsilon=1e-9
         )
@@ -242,7 +246,7 @@ class ModelUtilsTest(unittest.TestCase):
         are_equivalent, counterexample = are_approximate_equivalent(
             model1,
             model2,
-            [(-1, 1)]*2,
+            [(-1, 1)] * 2,
             p=2
         )
         self.assertTrue(are_equivalent)
@@ -253,7 +257,7 @@ class ModelUtilsTest(unittest.TestCase):
         are_equivalent, counterexample = are_approximate_equivalent(
             model1,
             model2,
-            [(-1, 1)]*3
+            [(-1, 1)] * 3
         )
         self.assertTrue(are_equivalent)
 
@@ -266,10 +270,10 @@ class ModelUtilsTest(unittest.TestCase):
         set_weights_on_layer(model1.layers[0], weights_1, bias_1)
         set_weights_on_layer(model2.layers[0], weights_2, bias_2)
 
-        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)]*2, p=1, epsilon=0.21)
+        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)] * 2, p=1, epsilon=0.21)
         self.assertTrue(are_equivalent)
 
-        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)]*2, p=1, epsilon=0.19)
+        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(-1, 1)] * 2, p=1, epsilon=0.19)
         self.assertFalse(are_equivalent)
 
     def test_approximate_equivalence_tf_3(self):
@@ -279,21 +283,21 @@ class ModelUtilsTest(unittest.TestCase):
         set_weights_on_layer(model1.layers[0], weights_1, bias_1)
         set_weights_on_layer(model2.layers[0], weights_2, bias_2)
 
-        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)]*3, p=2, epsilon=0.5)
+        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)] * 3, p=2, epsilon=0.5)
         self.assertTrue(are_equivalent)
 
-        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)]*3, p=2, epsilon=0.4)
+        are_equivalent, counterexample = are_approximate_equivalent(model1, model2, [(0, 1)] * 3, p=2, epsilon=0.4)
         self.assertFalse(are_equivalent)
 
-
-    #Tests weather models from different frameworks are considered approximately equivalent whenever they have the same
-    #architecture and activation function different from ReLu.
+    # Tests weather models from different frameworks are considered approximately equivalent whenever they have the same
+    # architecture and activation function different from ReLu.
     def test_approximate_equivalence_torch_and_tf(self):
         weights = [[[0.5, 0.1], [-0.15, 0.2], [-0.02, 1.00], [0.1, 0.3]], [[-0.5, 0.2], [0.35, -0.1]]]
         bias = [[0.4, -0.3], [0.2, 0.1]]
         layers_dim = [4, 2, 2]
         model1 = TorchFFNN(layers_dim, activation_layer=nn.Hardsigmoid())
-        model2 = TensorFlowFFNN(layers_dim, activation_layer=tf.keras.layers.Activation(activation=tf.keras.activations.hard_sigmoid))
+        model2 = TensorFlowFFNN(layers_dim, activation_func=tf.keras.layers.Activation(
+            activation=tf.keras.activations.hard_sigmoid))
         set_weights_on_layer(model1.layers[0], weights[0], bias[0])
         set_weights_on_layer(model2.layers[0], weights[0], bias[0])
         set_weights_on_layer(model1.layers[2], weights[1], bias[1])
@@ -302,7 +306,7 @@ class ModelUtilsTest(unittest.TestCase):
         are_equivalent, counterexample = are_approximate_equivalent(
             model1,
             model2,
-            [(-1, 1)]*4,
+            [(-1, 1)] * 4,
             p=float('inf')
         )
         self.assertTrue(are_equivalent)
@@ -320,7 +324,6 @@ class ModelUtilsTest(unittest.TestCase):
             clone_model(TF_MODEL_1)
         )
         self.assertTrue(are_equivalent)
-
 
     # Tests weather two models from pytorch are considered equivalent whenever one of the two outputs is
     # always greater than the other
@@ -349,13 +352,12 @@ class ModelUtilsTest(unittest.TestCase):
         set_weights_on_layer(model2.layers[0], weights21, bias)
         set_weights_on_layer(model2.layers[2], weights22, bias)
 
-        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)]*3)
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)] * 3)
         print(counterexample)
         self.assertTrue(are_equivalent)
 
         weights = next(tensors(model1))
         weights[0][0] -= 2
         set_weights_on_layer(model1.layers[0], weights, next(biases(model1)))
-        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)]*3)
+        are_equivalent, counterexample = are_argmax_equivalent(model1, model2, [(0, 1)] * 3)
         self.assertFalse(are_equivalent)
-

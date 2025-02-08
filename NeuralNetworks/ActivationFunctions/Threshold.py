@@ -1,8 +1,14 @@
-import ActivationFunction
+from NeuralNetworks.ActivationFunctions import ActivationFunction
 from z3 import BoolRef, If, Real
 
 
 class Threshold(ActivationFunction):
+    """
+    Threshold activation function.
+    This function is defined as:
+        f(x) = x if x > **threshold**,
+            **value** otherwise
+    """
 
     def __init__(self, threshold: float = 0.5, value: float = 0):
         super().__init__()

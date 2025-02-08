@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterator
+from typing import Any, Iterator
 import torch
 import copy
 from multipledispatch import dispatch

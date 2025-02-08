@@ -8,6 +8,7 @@ TORCH_MODEL_2 = TorchFFNN([10, 12, 14, 7])
 TF_MODEL_1 = TensorFlowFFNN([3, 2])
 TF_MODEL_2 = TensorFlowFFNN([5, 13, 16, 8, 9])
 
+
 class ModelUtilsTest(unittest.TestCase):
 
     def assertFloatsEqual(self, a: float, b: float):
@@ -114,8 +115,9 @@ class ModelUtilsTest(unittest.TestCase):
     def test_get_layer_tensor_values_torch_2(self):
         model = clone_model(TORCH_MODEL_2)
         set_weights_on_layer(model.layers[0],
-                             [[0.1]*12, [0.2]*12, [0.3]*12, [0.4]*12, [0.5]*12, [0.6]*12, [0.7]*12, [0.8]*12, [0.9]*12, [1.0]*12],
-                             [0.1]*12)
+                             [[0.1] * 12, [0.2] * 12, [0.3] * 12, [0.4] * 12, [0.5] * 12, [0.6] * 12, [0.7] * 12,
+                              [0.8] * 12, [0.9] * 12, [1.0] * 12],
+                             [0.1] * 12)
         ls = list(layers(model, layer_type=torch.nn.Linear))
         self.assertFloatsEqual(get_layer_tensor(ls[0])[1][1], 0.2)
         self.assertFloatsEqual(get_layer_tensor(ls[0])[7][11], 0.8)
@@ -130,7 +132,8 @@ class ModelUtilsTest(unittest.TestCase):
     def test_get_layer_tensor_values_tf_2(self):
         model = clone_model(TF_MODEL_2)
         set_weights_on_layer(list(layers(model, layer_type=tf.keras.layers.Dense))[3],
-                             [[0.1]*9, [0.2]*9, [0.3]*9, [0.4]*9, [0.5]*9, [0.6]*9, [0.7]*9, [0.8]*9], [0.1]*9)
+                             [[0.1] * 9, [0.2] * 9, [0.3] * 9, [0.4] * 9, [0.5] * 9, [0.6] * 9, [0.7] * 9, [0.8] * 9],
+                             [0.1] * 9)
         ls = list(layers(model, layer_type=tf.keras.layers.Dense))
         self.assertFloatsEqual(get_layer_tensor(ls[3])[1][1], 0.2)
         self.assertFloatsEqual(get_layer_tensor(ls[3])[6][8], 0.7)
@@ -164,14 +167,14 @@ class ModelUtilsTest(unittest.TestCase):
         apply_to_tensors(model, weight_proc=lambda w, i, j, k: weights_calls.append((w, i, j, k)),
                          bias_proc=lambda b, i, j: biases_calls.append((b, i, j)))
 
-        self.assertEqual(len(weights_calls), 10*12 + 12*14 + 14*7)
+        self.assertEqual(len(weights_calls), 10 * 12 + 12 * 14 + 14 * 7)
         self.assertEqual(len(biases_calls), sum([12, 14, 7]))
 
         self.assertFloatsEqual(weights_calls[0][0], 0.1)
         self.assertEqual(weights_calls[0], (weights_calls[0][0], 1, 0, 0))
 
-        self.assertFloatsEqual(weights_calls[3*12+1][0], 0.4)
-        self.assertEqual(weights_calls[3*12+1], (weights_calls[3*12+1][0], 1, 3, 1))
+        self.assertFloatsEqual(weights_calls[3 * 12 + 1][0], 0.4)
+        self.assertEqual(weights_calls[3 * 12 + 1], (weights_calls[3 * 12 + 1][0], 1, 3, 1))
 
         self.assertFloatsEqual(biases_calls[3][0], 0.1)
         self.assertEqual(biases_calls[3], (biases_calls[3][0], 1, 3))
@@ -185,25 +188,27 @@ class ModelUtilsTest(unittest.TestCase):
     def test_apply_to_tensors_tf_2(self):
         model = clone_model(TF_MODEL_2)
         set_weights_on_layer(list(layers(model, layer_type=tf.keras.layers.Dense))[3],
-                             [[0.1]*9, [0.2]*9, [0.3]*9, [0.4]*9, [0.5]*9, [0.6]*9, [0.7]*9, [0.8]*9], [0.1]*9)
+                             [[0.1] * 9, [0.2] * 9, [0.3] * 9, [0.4] * 9, [0.5] * 9, [0.6] * 9, [0.7] * 9, [0.8] * 9],
+                             [0.1] * 9)
         weights_calls: List[Tuple[float, int, int, int]] = []
         biases_calls: List[Tuple[float, int, int]] = []
         apply_to_tensors(model, weight_proc=lambda w, i, j, k: weights_calls.append((w, i, j, k)),
                          bias_proc=lambda b, i, j: biases_calls.append((b, i, j)))
 
-        self.assertEqual(len(weights_calls), 5*13 + 13*16 + 16*8 + 8*9)
+        self.assertEqual(len(weights_calls), 5 * 13 + 13 * 16 + 16 * 8 + 8 * 9)
         self.assertEqual(len(biases_calls), sum([13, 16, 8, 9]))
 
-        index = 5*13 + 13*16 + 16*8
+        index = 5 * 13 + 13 * 16 + 16 * 8
         self.assertFloatsEqual(weights_calls[index][0], 0.1)
         self.assertEqual(weights_calls[index], (weights_calls[index][0], 4, 0, 0))
 
-        index = 5*13 + 13*16 + 16*8 + 3*9 + 1
+        index = 5 * 13 + 13 * 16 + 16 * 8 + 3 * 9 + 1
         self.assertFloatsEqual(weights_calls[index][0], 0.4)
         self.assertEqual(weights_calls[index], (weights_calls[index][0], 4, 3, 1))
 
         self.assertFloatsEqual(biases_calls[sum([13, 16, 8])][0], 0.1)
         self.assertEqual(biases_calls[sum([13, 16, 8]) + 3], (biases_calls[sum([13, 16, 8]) + 3][0], 4, 3))
+
 
 if __name__ == '__main__':
     unittest.main()

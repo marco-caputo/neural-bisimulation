@@ -1,6 +1,14 @@
-import ActivationFunction
+from NeuralNetworks.ActivationFunctions import ActivationFunction
 from z3 import BoolRef, If, Real
+
+
 class HardSigmoid(ActivationFunction):
+    """
+    Hard Sigmoid activation function.
+    This function is a piecewise linear approximation of the sigmoid function, and is
+    defined as:
+        f(x) = max(0, min(1, x / 6 + 0.5))
+    """
 
     def __init__(self):
         super().__init__()

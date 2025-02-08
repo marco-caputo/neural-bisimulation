@@ -5,16 +5,34 @@ from NeuralNetworks.ActivationFunctions import *
 def activations(model: torch.nn.Module | tf.keras.Model) -> list[ActivationFunction]:
     """
     Extracts activation functions from a PyTorch or a TensorFlow model.
-    The provided activation functions are the activation functions of the model's layers in the order
+    The provided activation functions are the activation functions of the layers in the order
     they appear in the model from the input layer to the output layer.
+    This method assumes that the activation functions are defined as layers in the model.
+
+    The length of the returned list is always equal to the number of affine transformation
+    layers (Dense/Linear) in the model, i.e. the number of actual layers of nodes minus one.
+    If some affine transformation layers do not have an activation function, the corresponding
+    element in the list is set to the Identity activation function.
 
     :param model: PyTorch or TensorFlow model
     :return: the list of activation functions
     """
+    found_affine_trans = False
+
     for layer in layers(model):
         activation = get_layer_activation(layer)
-        if activation is not None:
+
+        if activation is None:
+            if found_affine_trans:
+                yield Identity()
+            else:
+                found_affine_trans = True
+        else:
+            found_affine_trans = False
             yield activation
+
+    if found_affine_trans:
+        yield Identity()
 
 
 def input_dim(model: torch.nn.Module | tf.keras.Model) -> int:
@@ -60,10 +78,11 @@ def apply_to_tensors(model: torch.nn.Module | tf.keras.Model,
     :param weight_proc: Function to apply to the weights
     :param bias_proc: Function to apply to the biases.
     """
-    for layer, tensor in enumerate(tensors(model), 1):
-        for i, row in enumerate(tensor):
-            for j, weight in enumerate(row):
-                weight_proc(weight, layer, i, j)
+    if weight_proc is not None:
+        for layer, tensor in enumerate(tensors(model), 1):
+            for i, row in enumerate(tensor):
+                for j, weight in enumerate(row):
+                    weight_proc(weight, layer, i, j)
 
     if bias_proc is not None:
         for layer, bias in enumerate(biases(model), 1):

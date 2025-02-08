@@ -1,8 +1,13 @@
-import ActivationFunction
-from z3 import BoolRef, If, Real
+from NeuralNetworks.ActivationFunctions import ActivationFunction
+from z3 import BoolRef, Real
 
 
 class Identity(ActivationFunction):
+    """
+    Identity activation function.
+    This function is defined as:
+        f(x) = x
+    """
 
     def __init__(self):
         super().__init__()

@@ -12,7 +12,8 @@ class TorchFFNN(torch.nn.Module):
 
     def __init__(self, layers_dim: List[int],
                  activations_as_layers: bool = True,
-                 activation_layer: nn.Module = nn.ReLU()):
+                 activation_layer: nn.Module = nn.ReLU(),
+                 output_activation: nn.Module = None):
         """
         Initializes a simple feedforward neural network in PyTorch with ReLU activation functions.
 
@@ -27,7 +28,9 @@ class TorchFFNN(torch.nn.Module):
             if self.activations_as_layers:
                 self.layers.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
                 if i < len(layers_dim) - 2:
-                    self.layers.append(activation_layer)
+                    self.layers.append(copy.deepcopy(activation_layer))
+                elif output_activation is not None and i == len(layers_dim) - 2:
+                    self.layers.append(copy.deepcopy(output_activation))
             else:
                 self.layers.append(nn.Linear(layers_dim[i], layers_dim[i + 1]))
 
@@ -43,27 +46,35 @@ class TensorFlowFFNN(tf.keras.Model):
 
     def __init__(self, layers_dim: List[int],
                  activations_as_layers: bool = True,
-                 activation_layer: tf.keras.layers.Layer = tf.keras.layers.ReLU(),
+                 activation_func: tf.keras.layers.Layer | str = None,
+                 output_activation: tf.keras.layers.Layer | str = None,
                  **kwargs):
         """
         Initializes a simple feedforward neural network in TensorFlow with ReLU activation functions.
 
         :param layers_dim: List of integers representing the number of neurons in each dense layer.
         :param activations_as_layers: specifies if activation functions should be defined as layers. Defaults to True.
-        :param activation_layer: Activation function to use, in form of a layer. Defaults to ReLU.
+        :param activation_func: Activation function to use, in form of a layer. Defaults to ReLU.
         """
         super(TensorFlowFFNN, self).__init__(**kwargs)
         self.layers_dim = layers_dim
         self.layers_list = []
         self.activations_as_layers = activations_as_layers
+        if activation_func is None:
+            activation_func = tf.keras.layers.ReLU() if activations_as_layers else 'relu'
+        if output_activation is None:
+            output_activation = tf.keras.layers.Identity() if activations_as_layers else None
 
         for i in range(1, len(layers_dim)):
             if self.activations_as_layers:
                 self.layers_list.append(tf.keras.layers.Dense(layers_dim[i], activation=None))
                 if i < len(layers_dim) - 1:
-                    self.layers_list.append(copy.deepcopy(activation_layer))
+                    self.layers_list.append(copy.deepcopy(activation_func))
+                elif output_activation is not None and i == len(layers_dim) - 1:
+                    self.layers_list.append(copy.deepcopy(output_activation))
             else:
-                self.layers_list.append(tf.keras.layers.Dense(layers_dim[i], activation='relu'))
+                self.layers_list.append(tf.keras.layers.Dense(layers_dim[i],
+                                                              activation='relu' if i < len(layers_dim) - 1 else None))
 
         # Pass dummy data to ensure the model is built
         dummy_input = tf.random.uniform((1, layers_dim[0]))

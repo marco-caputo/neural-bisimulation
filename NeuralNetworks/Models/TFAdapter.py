@@ -48,8 +48,10 @@ def get_layer_activation(layer: tf.keras.layers.Layer) -> ActivationFunction | N
     """
     l_type = type(layer)
 
-    if layer.activation is not None and layer.activation != tf.keras.activations.linear:
+    if l_type in {tf.keras.layers.Dense, tf.keras.layers.Activation} and \
+            layer.activation not in {None, tf.keras.activations.linear}:
         layer = _to_layer(layer.activation)
+        l_type = type(layer)
 
     if l_type == tf.keras.layers.Dense:
         return None
@@ -86,10 +88,6 @@ def _to_layer(activation: Callable) -> Any:
     :param activation: The activation function
     :return: The corresponding layer
     """
-    print(activation)
-    if type(activation) in [tf.keras.layers.ReLU, tf.keras.layers.LeakyReLU, tf.keras.layers.Activation]:
-        return activation
-
     if activation == tf.keras.activations.relu:
         return tf.keras.layers.ReLU()
     if activation == tf.keras.activations.leaky_relu:

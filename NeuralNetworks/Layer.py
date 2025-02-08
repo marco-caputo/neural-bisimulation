@@ -16,13 +16,19 @@ class Layer:
             biases = [0] * len(weights[0])
         if activation_functions is None:
             activation_functions = [Identity()] * len(weights[0])
-        if (len(weights[0]) != len(biases) or len(weights[0]) != len(activation_functions)):
+        if len(weights[0]) != len(biases) or len(weights[0]) != len(activation_functions):
             raise ValueError("The dimension of weight tensor, biases and activation functions in the same layer must"
                              " be the coherent.")
 
         self.weights = weights
         self.biases = biases
         self.activation_functions = activation_functions
+
+
+    def __deepcopy__(self, memodict={}):
+        return Layer(self.weights.copy(),
+                     self.biases.copy(),
+                     [activation_function.copy() for activation_function in self.activation])
 
     def size(self):
         """
