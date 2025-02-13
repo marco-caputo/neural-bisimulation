@@ -1,8 +1,10 @@
 from .SMTEncoder import (
     are_strict_equivalent,
-    encode_into_SMT_formula
+    are_approximate_equivalent,
+    are_argmax_equivalent
 )
 
 from .SMTUtils import (
-    get_float_formula_satisfiability
+    get_float_formula_satisfiability,
+    encode_into_SMT_formula
 )

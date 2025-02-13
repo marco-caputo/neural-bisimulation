@@ -1,9 +1,10 @@
+from typing import Dict, Tuple
 import sys
 from itertools import groupby
 import networkx as nx
 from matplotlib import pyplot as plt
-from NNToGraph import I_str, H_str, B_str, O_str, sep_1, sep_2
-from typing import Dict, Tuple
+
+from NeuralNetworks.Graphs import I_str, H_str, B_str, O_str, sep_1, sep_2
 
 NODE_SIZE = 800
 NODE_COLOR = 'skyblue'
