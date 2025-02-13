@@ -14,11 +14,11 @@ def distance_approx(spa:SpaModel, epsilon:Real, s:String, t:String):
         solver.add(pseudo(d_matrix, len(spa.states)))
         for state_1 in spa.states:
             for state_2 in spa.states:
-                if any((spa.squiggly_l(s, a) ^ spa.squiggly_l(t, a)) for a in spa.labels):
-                    solver.add(postfixpoint_3(d_matrix, state_1, state_2, spa))
-                if all(spa.squiggly_l(s, a) or spa.squiggly_l(t, a) for a in spa.labels):
-                    solver.add(postfixpoint_2(d_matrix, state_1, state_2, spa))
-                if all(not (spa.squiggly_l(s, a) ^ spa.squiggly_l(t, a)) for a in spa.labels):
+                if any((bool(spa.squiggly_l(state_1, a)) ^ bool(spa.squiggly_l(state_2, a))) for a in spa.labels):
+                    solver.add(postfixpoint_3(spa, d_matrix, state_1, state_2))
+                elif not(all((bool(spa.squiggly_l(state_1, a)) or bool(spa.squiggly_l(state_2, a))) for a in spa.labels)):
+                    solver.add(postfixpoint_2(spa, d_matrix, state_1, state_2))
+                elif all(not (bool(spa.squiggly_l(state_1, a)) ^ bool(spa.squiggly_l(state_2, a))) for a in spa.labels):
                     solver.add(postfixpoint_1(spa, d_matrix, state_1, state_2, f'{state_1}_{state_2}_{i}'))
         result = solver.check()
         if result != z3.unsat and result != z3.unknown:
@@ -29,7 +29,7 @@ def distance_approx(spa:SpaModel, epsilon:Real, s:String, t:String):
     return [lower_bound, upper_bound]
 
 
-def pseudo(d_matrix:Array[IntSort(), ArraySort(IntSort(), RealSort())], n_states:Int):
+def pseudo(d_matrix:Array, n_states:Int):
     constraints = []
     for s in range(n_states):
         constraints.append(d_matrix[s][s] == 0)

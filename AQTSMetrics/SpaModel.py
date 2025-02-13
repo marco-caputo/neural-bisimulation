@@ -18,4 +18,4 @@ class SPA:
             print(key, value)
 
     def squiggly_l(self, s, a):
-        return self.data[s].get(a, {})
+        return self.data[s].get(a, [])
