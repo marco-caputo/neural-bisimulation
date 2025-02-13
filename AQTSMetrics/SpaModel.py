@@ -1,5 +1,5 @@
 class SPA:
-    def __init__(self, data):
+    def __init__(self, data: dict[str, dict[str, list[dict[str, float]]]]):
         set_ = set()
         self.data = data
 

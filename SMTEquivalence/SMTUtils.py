@@ -21,11 +21,45 @@ def get_float_formula_satisfiability(formula: BoolRef, inputs: List[float]) -> T
     result = s.check()
     if result == sat:
         model = s.model()
-        return True, [float(model.evaluate(x).as_decimal(10).rstrip('?')) for x in inputs]
+        return True, [float(model.evaluate(x).as_decimal(10).rstrip('?')) for x in inputs] # Forse bastava fare model[x].as_long()
     elif result == unsat:
         return False, None
     else:
         raise RuntimeError("Solver returned 'unknown'. The equivalence might be too complex to decide.")
+
+
+def is_satisfiable(formula: BoolRef) -> bool:
+    """
+    Checks the satisfiability of a Z3 formula and returns a boolean indicating if the formula is satisfiable.
+
+    :param formula: A Z3 formula
+    :return: A boolean indicating if the formula is satisfiable
+    """
+    s = Solver()
+    s.add(formula)
+    if s.check() == unknown:
+        raise RuntimeError("Solver returned 'unknown'. The equivalence might be too complex to decide.")
+    return s.check() == sat
+
+
+def get_optimal_solution(objective: ArithRef | Real, constraints: list[BoolRef], maximize: bool = True) -> Tuple[bool, float | None]:
+    """
+    Finds the optimal value of the given float objective function under the given constraints.
+
+    :param objective: The objective function to optimize
+    :param constraints: A list of constraints
+    :param maximize: A boolean indicating whether to maximize or minimize the objective
+    :return: A tuple containing a boolean indicating if the optimization problem is feasible and the optimal value
+    """
+    opt = Optimize()
+    opt.add(And(constraints))
+
+    opt.maximize(objective) if maximize else opt.minimize(objective)
+    if opt.check() == sat:
+        model = opt.model()
+        return True, model.evaluate(objective).as_long()
+
+    return False, None
 
 
 def encode_into_SMT_formula(model: NeuralNetwork | tf.keras.Model | torch.nn.Module,

@@ -2,7 +2,9 @@ import bispy as bp
 import networkx as nx
 from z3 import *
 
-from NeuralNetworks import create_graph, visualize_model_graph, TensorFlowFFNN, TorchFFNN
+from Testing import *
+from NeuralNetworks.Graphs import *
+from SMTEquivalence import *
 
 
 def bisimulation_test():
@@ -21,18 +23,9 @@ def model_visualization_test():
     visualize_model_graph(graph, inter_layer_distance=2.0, intra_layer_distance=0.5, round_digits=4)
 
 def z3_test():
-    l = Array('l', IntSort(), RealSort())
-    i: Int = Int('i')
-    j: Int = Int('j')
-    s = Solver()
-
-    s.add(i <= 1)
-    s.add(i >= 0)
-    s.add(j == i + 1)
-    s.add(l[i] <= l[j])
-
-    print(s.check())
-    print(s.model())
+    x = Real('x')
+    y = Real('y')
+    print(get_optimal_solution(x + 2*y, [x >= 0, y >= 0, x <= 3*y, y <= 2], maximize=True))
 
 
 def main():
