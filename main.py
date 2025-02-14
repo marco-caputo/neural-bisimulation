@@ -25,7 +25,7 @@ def model_visualization_test():
 def z3_test():
     x = Real('x')
     y = Real('y')
-    print(get_optimal_solution(x + 2*y, [x >= 0, y >= 0, x <= 3*y, y <= 2], maximize=True))
+    print(get_optimal_solution(x + 2*y, [x >= 0.1, y >= 0, x <= 3*y, y <= 2], maximize=False))
 
 
 def main():

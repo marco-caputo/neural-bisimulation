@@ -46,18 +46,27 @@ def get_optimal_solution(objective: ArithRef, constraints: list[BoolRef], maximi
     """
     Finds the optimal value of the given float objective function under the given constraints.
 
+    The output of the function is a tuple containing a boolean indicating if the optimization problem is feasible and
+    the optimal value. In particular:
+    - If the optimization problem has an empty feasible region, the function returns False and None;
+    - If the optimization problem is unbounded, the function returns True and None;
+    - If the optimization problem is feasible and bounded, the function returns True and the optimal float value.
+
     :param objective: The objective function to optimize
     :param constraints: A list of constraints
     :param maximize: A boolean indicating whether to maximize or minimize the objective
-    :return: A tuple containing a boolean indicating if the optimization problem is feasible and the optimal value
+    :return: A tuple containing a boolean indicating if the optimization problem is feasible and the optimal value if any
     """
     opt = Optimize()
     opt.add(And(constraints))
 
-    opt.maximize(objective) if maximize else opt.minimize(objective)
+    obj = opt.maximize(objective) if maximize else opt.minimize(objective)
     if opt.check() == sat:
-        model = opt.model()
-        return True, model.evaluate(objective).as_long()
+        b = opt.upper(obj) if maximize else opt.lower(obj)
+        if str(b) in {"oo", "-oo"}:
+            return True, None
+        else:
+            return True, b.as_long() if b.is_int() else b.as_decimal(10).rstrip('?')
 
     return False, None
 
