@@ -1,4 +1,4 @@
-from typing import Set, Dict, Callable
+from typing import Set, Dict
 
 from AQTSMetrics import SPA
 
@@ -19,8 +19,8 @@ class FiniteStateProcess:
             raise ValueError("Start state must be in the set of states K")
 
         self.states = set(states)
-        self.p0 = start_state
-        self.delta = dict(transition_function) if transition_function is not None else dict()
+        self.start = start_state
+        self.transition_function = dict(transition_function) if transition_function is not None else dict()
 
     def target_states(self, state: str, action: str) -> Set[str]:
         """
@@ -29,18 +29,18 @@ class FiniteStateProcess:
         """
         if state not in self.states:
             raise ValueError("State must be in the set of states")
-        return self.delta.get(state, {}).get(action, set())
+        return self.transition_function.get(state, {}).get(action, set())
 
     def extension(self) -> Dict[str, Set[str]]:
         """
         Returns the extension function of the FSP in form of a dictionary.
         The extension function is a mapping from states to the set of actions allowed in that state.
         """
-        return {state: set(self.delta.get(state, {}).keys()) for state in self.states}
+        return {state: set(self.transition_function.get(state, {}).keys()) for state in self.states}
 
-    def sigma(self) -> Set[str]:
+    def all_actions(self) -> Set[str]:
         """
-        Returns the set of all actions allowed in the FSP.
+        Returns the set of all actions allowed in the FSP, including the unobservable action τ.
         """
         return {action for state in self.states for action in self.actions(state)} | {self.TAU}
 
@@ -52,7 +52,7 @@ class FiniteStateProcess:
         if state not in self.states:
             raise ValueError("State must be in the set of states")
 
-        return set(self.delta.get(state, {}).keys())
+        return set(self.transition_function.get(state, {}).keys())
 
     def is_tau(self, action: str) -> bool:
         """
@@ -75,14 +75,14 @@ class FiniteStateProcess:
         if state not in self.states or target_state not in self.states:
             raise ValueError("States must be in the set of states")
 
-        if state not in self.delta:
-            self.delta[state] = {}
-        if action not in self.delta[state]:
-            self.delta[state][action] = set()
+        if state not in self.transition_function:
+            self.transition_function[state] = {}
+        if action not in self.transition_function[state]:
+            self.transition_function[state][action] = set()
 
-        self.delta[state][action].add(target_state)
+        self.transition_function[state][action].add(target_state)
 
-    def to_spa(self) -> 'SPA':
+    def to_spa(self) -> SPA:
         """
         Converts the FSP to a SPA model.
         The conversion is made maintaining the same set of states and transitions, so every state in the resulting
@@ -101,4 +101,4 @@ class FiniteStateProcess:
         return SPA(data)
 
     def __repr__(self):
-        return f"FiniteStateProcess(K={self.states}, p0={self.p0}, Δ={self.delta}, E={self.extension()})"
+        return f"FiniteStateProcess(K={self.states}, p0={self.start}, Δ={self.transition_function}, E={self.extension()})"

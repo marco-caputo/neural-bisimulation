@@ -1,1 +1,1 @@
-from FSP import FiniteStateProcess
+from .FSP import FiniteStateProcess

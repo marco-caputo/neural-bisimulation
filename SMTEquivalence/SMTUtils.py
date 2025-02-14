@@ -42,7 +42,7 @@ def is_satisfiable(formula: BoolRef) -> bool:
     return s.check() == sat
 
 
-def get_optimal_solution(objective: ArithRef | Real, constraints: list[BoolRef], maximize: bool = True) -> Tuple[bool, float | None]:
+def get_optimal_solution(objective: ArithRef, constraints: list[BoolRef], maximize: bool = True) -> Tuple[bool, float | None]:
     """
     Finds the optimal value of the given float objective function under the given constraints.
 

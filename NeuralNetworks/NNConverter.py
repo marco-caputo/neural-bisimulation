@@ -6,6 +6,7 @@ from SMTEquivalence.SMTUtils import get_optimal_solution, is_satisfiable
 from NeuralNetworks.NeuralNetwork import NeuralNetwork
 
 ACTION = "a"
+START_STATE = "s"
 
 
 def to_fsp(model: NeuralNetwork, input_bounds: list[tuple[float, float]] = None) -> FiniteStateProcess:
@@ -38,7 +39,7 @@ def to_fsp(model: NeuralNetwork, input_bounds: list[tuple[float, float]] = None)
         hidden_outputs_constraints = _get_hidden_outputs_constraints(model, input_bounds, variables_per_layer)
 
     # Initialize the FSP model
-    states = {"s"}
+    states = {START_STATE}
     for variables in variables_per_layer:
         states.update([str(v) for v in variables])
     fsp = FiniteStateProcess(states, "s")
@@ -85,7 +86,6 @@ def to_spa(model: NeuralNetwork, input_bounds: list[tuple[float, float]] = None)
     :return: A SPA model representing the given neural network.
     """
     return to_fsp(model, input_bounds).to_spa()
-
 
 
 def _get_hidden_outputs_constraints(model: NeuralNetwork,

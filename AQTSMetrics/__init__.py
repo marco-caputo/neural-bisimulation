@@ -1,1 +1,1 @@
-from SpaModel import SPA
+from .SpaModel import SPA
