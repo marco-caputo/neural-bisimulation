@@ -2,7 +2,7 @@ from z3 import Real, Sum, And, BoolRef
 
 from AQTSMetrics import SPA
 from ApproxBisimulation import FiniteStateProcess
-from SMTEquivalence.SMTUtils import get_optimal_solution, is_satisfiable
+from SMTEquivalence import get_optimal_solution, is_satisfiable
 from NeuralNetworks.NeuralNetwork import NeuralNetwork
 
 ACTION = "a"

@@ -16,7 +16,7 @@ def distance_approx(spa:SpaModel, epsilon:Real, s:String, t:String):
             for state_2 in spa.states:
                 if any((bool(spa.squiggly_l(state_1, a)) ^ bool(spa.squiggly_l(state_2, a))) for a in spa.labels):
                     solver.add(postfixpoint_3(spa, d_matrix, state_1, state_2))
-                elif not(all((bool(spa.squiggly_l(state_1, a)) or bool(spa.squiggly_l(state_2, a))) for a in spa.labels)):
+                elif (all(not(bool(spa.squiggly_l(state_1, a)) or bool(spa.squiggly_l(state_2, a))) for a in spa.labels)):
                     solver.add(postfixpoint_2(spa, d_matrix, state_1, state_2))
                 elif all(not (bool(spa.squiggly_l(state_1, a)) ^ bool(spa.squiggly_l(state_2, a))) for a in spa.labels):
                     solver.add(postfixpoint_1(spa, d_matrix, state_1, state_2, f'{state_1}_{state_2}_{i}'))
