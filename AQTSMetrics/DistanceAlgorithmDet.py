@@ -1,3 +1,5 @@
+import z3
+
 from AQTSMetrics import DeterministicSPA
 from PostFixPointDet import *
 
@@ -6,24 +8,39 @@ def distance_approx_det(spa: DeterministicSPA, epsilon: float, s: str, t: str):
     lower_bound = 0
     upper_bound = 1
     m = 0.5
-    d = Array('DistanceMatrix', IntSort(), ArraySort(IntSort(), RealSort()))
     solver = Solver()
+    solver.set("timeout", 15000)
     for i in range(math.ceil(math.log(1 / epsilon, 2))):
-        solver.reset()
+        sat_constraints = []
+        unb_constraints = []
         print(f'ITERATION {i}')
-        solver.add(d[spa.index_of(s)][spa.index_of(t)] <= m)
-        solver.add(pseudo(d, len(spa.states)))
-        for i, s1 in enumerate(spa.states):
-            for j, s2 in enumerate(spa.states, start=i):
+        d = Array(f'DistanceMatrix_{i}', IntSort(), ArraySort(IntSort(), RealSort()))
+        for j, s1 in enumerate(spa.states):
+            for s2 in spa.states[j:]:
                 if any((bool(spa.distribution(s1, a)) ^ bool(spa.distribution(s2, a))) for a in spa.labels):
-                    solver.add(postfixpoint_3(spa, d, s1, s2))
+                    sat_constraints.append(postfixpoint_3(spa, d, s1, s2))
                 elif all(not (bool(spa.distribution(s1, a)) or bool(spa.distribution(s2, a))) for a in spa.labels):
-                    solver.add(postfixpoint_2(spa, d, s1, s2))
+                    sat_constraints.append(postfixpoint_2(spa, d, s1, s2))
                 elif all(not (bool(spa.distribution(s1, a)) ^ bool(spa.distribution(s2, a))) for a in spa.labels):
-                    solver.add(postfixpoint_1(spa, d, s1, s2))
+                    satisfiable, unbounded = postfixpoint_1(spa, d, s1, s2)
+                    sat_constraints.append(satisfiable)
+                    unb_constraints.append(unbounded)
 
-        result = solver.check()
-        if result != z3.sat:
+        solver.reset()
+        solver.add(pseudo(d, len(spa.states)))
+        solver.add(d[spa.index_of(s)][spa.index_of(t)] <= m)
+        solver.add(simplify(And(sat_constraints)))
+        result_sat = solver.check()
+        if result_sat == z3.unknown:
+            print(solver.reason_unknown())
+        solver.reset()
+        solver.add(pseudo(d, len(spa.states)))
+        solver.add(d[spa.index_of(s)][spa.index_of(t)] <= m)
+        solver.add(simplify(Or(unb_constraints)))
+        result_unb = solver.check()
+        print(result_sat, result_unb)
+
+        if result_unb == z3.sat or result_sat != z3.sat:
             lower_bound = m
         else:
             upper_bound = m

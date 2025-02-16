@@ -14,6 +14,7 @@ def hd_formula(spa: DeterministicSPA, d: Array, tau: dict[str, Real], tau1: dict
     constraints = ([And(0 <= x_array[spa.index_of(s)], x_array[spa.index_of(s)] <= 1) for s in spa.states] +
                    [x_array[spa.index_of(s)] - x_array[spa.index_of(t)] <= d[spa.index_of(s)][spa.index_of(t)]
                     for s in spa.states for t in spa.states])
+    constraints = simplify(And(constraints))
 
     return get_optimization_problem_formula(objective, constraints, [x_array], maximize=True, suffix=var_suffix)
 
@@ -25,18 +26,18 @@ def haus_formula(spa: DeterministicSPA, d: Array, a: str, s: str, t: str) -> tup
     """
     if spa.distribution(s, a) is None or spa.distribution(t, a) is None:
         raise ValueError(f'Action {a} not found in the state {s} or {t}.')
+
     hd_formula_1, hd_y_1 = hd_formula(spa, d, spa.distribution(s, a), spa.distribution(t, a), f'{s}_{t}_1')
     hd_formula_2, hd_y_2 = hd_formula(spa, d, spa.distribution(t, a), spa.distribution(s, a), f'{s}_{t}_2')
-
     constraints = [hd_y_1 == hd_y_2, hd_formula_1, hd_formula_2]
 
-    not_empty_formula = And(constraints)                            # A solution exists
-    unbounded_formula = And(And(constraints), hd_y_1 > 1e10)  # Unbounded solution
+    not_empty_formula = simplify(And(constraints))                   # A solution exists
+    unbounded_formula = And(not_empty_formula, hd_y_1 > 1e10)  # Unbounded solution
 
     return not_empty_formula, unbounded_formula
 
 
-def postfixpoint_1(spa: DeterministicSPA, d: Array, s: str, t: str) -> BoolRef:
+def postfixpoint_1(spa: DeterministicSPA, d: Array, s: str, t: str) -> tuple[BoolRef, BoolRef]:
     """
     Verifies if the postfixpoint_1 property holds for the given deterministic SPA model, states and current value of m.
 
@@ -52,14 +53,13 @@ def postfixpoint_1(spa: DeterministicSPA, d: Array, s: str, t: str) -> BoolRef:
 
     # Checks if there is an optimal solution among all actions
     not_empty_constraints = []  # Solution exists
-    unbounded_constraints = []  # Solution exists and it is umbounded
+    unbounded_constraints = []  # Solution exists and it is unbounded
     for a in spa.actions(s):
         not_empty_formula, unbounded_formula = haus_formula(spa, d, a, s, t)
         not_empty_constraints.append(not_empty_formula)
         unbounded_constraints.append(unbounded_formula)
 
-    # At least one bounded solution exists and no unbounded solution exists
-    return And(Or(not_empty_constraints), Not(Or(unbounded_constraints)))
+    return simplify(Or(not_empty_constraints)), simplify(Or(unbounded_constraints))
 
 
 # Case: For each action a → l(s,a) == {} AND l(t, a) == {}
