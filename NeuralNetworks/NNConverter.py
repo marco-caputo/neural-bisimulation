@@ -1,6 +1,8 @@
 from z3 import Real, Sum, And, BoolRef
+import numpy as np
+from scipy.stats import truncnorm
 
-from AQTSMetrics import SPA
+from AQTSMetrics import SPA, DeterministicSPA
 from ApproxBisimulation import FiniteStateProcess
 from SMTEquivalence import get_optimal_solution, is_satisfiable
 from NeuralNetworks.NeuralNetwork import NeuralNetwork
@@ -51,7 +53,7 @@ def to_fsp(model: NeuralNetwork,
     states = {START_STATE}
     for variables in variables_per_layer:
         states.update([str(v) for v in variables])
-    fsp = FiniteStateProcess(states, "s")
+    fsp = FiniteStateProcess(states, START_STATE)
 
     # Define max constraints for each node in each layer
     is_max_constraints = [[None for _ in range(len(variables))] for variables in variables_per_layer]
@@ -93,12 +95,12 @@ def to_fsp(model: NeuralNetwork,
     return fsp
 
 
-def to_spa(model: NeuralNetwork,
+def to_spa_smt(model: NeuralNetwork,
            input_bounds: list[tuple[float, float]] = None,
            shallow_bounds: bool = False) -> SPA:
     """
-    Converts a neural network to a SPA model.
-    The SPA model is obtained by encoding the neural network as a set of states and transitions between them where:
+    Converts a neural network to a DSPA model.
+    The DSPA model is obtained by encoding the neural network as a set of states and transitions between them where:
     - a state is created for each node in each layer of the network, representing the state where that node has the
         maximum value in its layer,
     - a probabilistic transition is added between two states if, according to weights and input bounds, the state of
@@ -120,6 +122,93 @@ def to_spa(model: NeuralNetwork,
     """
     return to_fsp(model, input_bounds, shallow_bounds).to_spa()
 
+
+def to_spa_probabilistic(model: NeuralNetwork,
+                        number_of_samples: int = 10000,
+                        mean: float = 0.0, std_deviation: float = 1.0,
+                        lower: float = None, upper: float = None,
+                        seed: int = None) -> DeterministicSPA:
+    """
+    Converts a neural network to a DSPA model.
+    The DSPA model is obtained by encoding the neural network as a set of states and transitions between them where:
+    - a state is created for each node in each layer of the network, representing the state where that node has the
+        maximum value in its layer,
+    - a probabilistic transition is added between two states if, according to weights and input bounds, the state of
+        a node having a maximum value in its layer can lead to a node in the next layer having the maximum value in
+        its layer.
+
+    The probability of each transition is derived heuristically by observing the hidden outputs of the network from
+    random input samples, obtained by a normal distribution with the given mean and standard deviation. The default
+    values for the mean and standard deviation are 0 and 1, respectively, which correspond to the typical values used
+    for data scaling in machine learning.
+    In-scale lower and upper bounds can be specified to limit the range of the generated samples.
+
+    :param model: a NeuralNetwork model,
+    :param number_of_samples: The number of samples to draw from the normal distribution.
+    :param mean: The mean of the normal distribution.
+    :param std_deviation: The standard deviation of the normal distribution.
+    :param lower: The lower bound for the truncation of the normal distribution.
+    :param upper: The upper bound for the truncation of the normal distribution.
+    :param seed: The seed for the random sample generator.
+    """
+    # Declare state strings for each layer including the input layer
+    states_per_layer: list[list[str]] = [[f'x{i}' for i in range(model.input_size())]]
+    for i, layer in enumerate(model.layers, 1):
+        states_per_layer.append([f'h{j}_{i}' for j in range(len(layer))])
+    states = [item for sublist in states_per_layer for item in sublist]
+
+    # Initialize the transition counts
+    transition_counts = {s: dict() for s in states}
+    for i in range(1, len(states_per_layer)):
+        for s1 in states_per_layer[i-1]:
+            for s2 in states_per_layer[i]:
+                transition_counts[s1][s2] = 0
+
+    # Generate random input samples and count the transitions
+    for inputs in _random_vectors(number_of_samples, model.input_size(), mean, std_deviation,
+                                  lower if lower not in {None, float('-inf')} else -np.inf,
+                                  upper if upper not in {None, float('inf')} else np.inf,
+                                  seed):
+        for i, layer in enumerate(model.layers, 1):
+            outputs = layer.forward_pass(inputs)
+            s1 = states_per_layer[i-1][inputs.index(max(inputs))]
+            s2 = states_per_layer[i][outputs.index(max(outputs))]
+            transition_counts[s1][s2] += 1
+            inputs = outputs
+
+    # Normalize the transition counts to obtain the probabilities
+    spa_data = {s: {ACTION: dict()} for s in states}
+    for s1 in states:
+        total = sum(transition_counts[s1].values())
+        for s2 in states:
+            if s2 in transition_counts[s1] and transition_counts[s1][s2] != 0:
+                spa_data[s1][ACTION][s2] = transition_counts[s1][s2] / total
+
+    # Add initial state and transitions
+    spa_data[START_STATE] = {ACTION: {s: 1 / len(states_per_layer[0]) for s in states_per_layer[0]}}
+
+    return DeterministicSPA(spa_data)
+
+def _random_vectors(num_vectors: int, vector_dim: int,
+                    mean: float = 0., std_dev: float = 1.,
+                    lower: float = -np.inf, upper: float = np.inf,
+                    seed: int = None) -> list[list[float]]:
+    """
+    Generates a sequence of random vectors from a Gaussian distribution with the given mean and standard deviation.
+
+    :param num_vectors: Number of random vectors to generate
+    :param vector_dim: Dimension of each random vector
+    :param mean: Mean of the Gaussian distribution
+    :param std_dev: Standard deviation of the Gaussian distribution
+    :param lower: Lower bound for the truncation
+    :param upper: Upper bound for the truncation
+    :return: List of random vectors (numpy arrays)
+    """
+    a, b = (lower - mean) / std_dev, (upper - mean) / std_dev  # Convert bounds to standard normal scale
+    rng = np.random.default_rng(seed)  # Create a random generator with seed
+    random_vectors = truncnorm.rvs(a, b, loc=mean, scale=std_dev, size=(num_vectors, vector_dim), random_state=rng)
+
+    return random_vectors.tolist()
 
 def _get_hidden_outputs_constraints(model: NeuralNetwork,
                                     input_bounds: list[tuple[float, float]],

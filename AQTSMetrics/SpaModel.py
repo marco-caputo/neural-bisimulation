@@ -63,16 +63,11 @@ class DeterministicSPA:
         Returns the probability of transitioning from state s to state t given the action a.
         If the state s has no outgoing transitions for the action a, an exception is raised.
         """
-        self._check_state(s)
-        self._check_state(t)
+        s = self._check_state(s)
+        t = self._check_state(t)
         self._check_action(a)
         if self.distribution(s, a) is None:
             raise ValueError(f'Action {a} not found in the state {s}.')
-
-        if isinstance(s, int):
-            s = self.states[s]
-        if isinstance(t, int):
-            t = self.states[t]
 
         return self.data[s].get(a, {}).get(t, 0)
 
@@ -86,16 +81,62 @@ class DeterministicSPA:
         :param a: The action
         :return: The distribution of the action a in the state s
         """
-        self._check_state(s)
+        s = self._check_state(s)
         self._check_action(a)
         return self.data[s].get(a, None)
 
-    def _check_state(self, s: str | int):
+    def add_state(self, s: str):
+        """
+        Adds a new state to the model.
+        If the state already exists, an exception is raised.
+
+        :param s: The state to add
+        """
+        if s in self.states:
+            raise ValueError(f'State {s} already exists.')
+        self.states.append(s)
+        self.data[s] = dict()
+
+    def add_distribution(self, s: str | int, a: str, distribution: dict[str, float]):
+        """
+        Adds a new distribution to the given state-action pair.
+        If the state-action pair already has a distribution, it is overwritten.
+        Is not necessary for the action a to be already in the set of actions of DSPA.
+
+        :param s: The source state
+        :param a: The action
+        :param distribution: The distribution of the action a in the state s
+        """
+        s = self._check_state(s)
+        self._check_distribution(distribution)
+        if a not in self.labels:
+            self.labels.append(a)
+
+        self.data[s][a] = dict(distribution)
+
+    def _check_state(self, s: str | int) -> str:
         if isinstance(s, str) and s not in self.states:
             raise ValueError(f'Action {s} not found in the states.')
         if isinstance(s, int) and (s < 0 or s >= len(self.states)):
             raise ValueError(f'State {s} not found in the states.')
+        if isinstance(s, int):
+            s = self.states[s]
+        return s
 
     def _check_action(self, a: str):
         if a not in self.labels:
             raise ValueError(f'Action {a} not found in the labels.')
+
+    def _check_distribution(self, distribution: dict[str, float]):
+        for p in distribution.values():
+            if p < 0 or 1 < p:
+                raise ValueError('The probabilities must be in the range [0, 1].')
+        if abs(sum(distribution.values()) - 1) > 1e-6:
+            raise ValueError('The sum of probabilities must be equal to 1.')
+
+    def __iter__(self):
+        return iter(self.states)
+
+    def __repr__(self):
+        return f'DSPA({self.data})'
+
