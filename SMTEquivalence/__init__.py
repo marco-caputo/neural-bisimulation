@@ -5,6 +5,8 @@ from .SMTEncoder import (
 )
 
 from .SMTUtils import (
+    is_satisfiable,
     get_float_formula_satisfiability,
+    get_optimal_solution,
     encode_into_SMT_formula
 )

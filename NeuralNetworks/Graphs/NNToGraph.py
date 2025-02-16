@@ -26,7 +26,7 @@ def _add_bias_edge_proc(G: nx.DiGraph, num_of_layers: int) -> Callable[[float, i
             )
     return add_bias_edge
 
-@dispatch(torch.nn.Module | tf.keras.Model)
+
 def create_graph(model: torch.nn.Module | tf.keras.Model, add_biases: bool = True) -> nx.DiGraph:
     """
     Converts a model into a neuron-level graph representation.
@@ -48,7 +48,7 @@ def create_graph(model: torch.nn.Module | tf.keras.Model, add_biases: bool = Tru
     return G
 
 @dispatch(NeuralNetwork)
-def create_graph(model: torch.nn.Module | tf.keras.Model, add_biases: bool = True) -> nx.DiGraph:
+def create_graph(model: NeuralNetwork, add_biases: bool = True) -> nx.DiGraph:
     """
     Converts a NeuralNetwork into a neuron-level graph representation.
     The graph representation is a directed graph where each node represents a neuron and each edge represents a
