@@ -9,14 +9,24 @@ def hd_formula(spa: DeterministicSPA, d: Array, tau: dict[str, Real], tau1: dict
     Returns the Z3 formula for the hd optimization problem and the variable y that represents the optimal
     value of the objective function.
     """
-    x_array = Array(f'x_array_{var_suffix}', IntSort(), RealSort())
-    objective = Sum([(tau.get(s, 0.) - tau1.get(s, 0.)) * x_array[spa.index_of(s)] for s in spa.states])
-    constraints = ([And(0 <= x_array[spa.index_of(s)], x_array[spa.index_of(s)] <= 1) for s in spa.states] +
-                   [x_array[spa.index_of(s)] - x_array[spa.index_of(t)] <= d[spa.index_of(s)][spa.index_of(t)]
-                    for s in spa.states for t in spa.states])
-    constraints = simplify(And(constraints))
+    def i(s: str) -> int:
+        return spa.index_of(s)
+    
+    x = Array(f'x_array_{var_suffix}', IntSort(), RealSort())
+    primal_objective = simplify(Sum([(tau.get(s, 0.) - tau1.get(s, 0.)) * x[i(s)] for s in spa.states]))
+    primal_constraints = simplify(And([And(0 <= x[i(s)], x[i(s)] <= 1) for s in spa.states] +
+                                  [x[i(s)] - x[i(t)] <= d[i(s)][i(t)] for s in spa.states for t in spa.states]))
 
-    return get_optimization_problem_formula(objective, constraints, [x_array], maximize=True, suffix=var_suffix)
+    pi = Array(f'pi_matrix_{var_suffix}', IntSort(), ArraySort(IntSort(), RealSort()))
+    nu = Array(f'nu_array_{var_suffix}', IntSort(), RealSort())
+    dual_objective = simplify(Sum([d[i(s)][i(t)] * pi[i(s)][i(t)] for s in spa.states for t in spa.states]) +
+                              Sum([nu[i(s)] for s in spa.states]))
+    dual_constraints = simplify(And([Sum([pi[i(s)][i(t)] - pi[i(t)][i(s)] for t in spa.states]) +
+                                     nu[i(s)] >= tau.get(s, 0.) - tau1.get(s, 0.) for s in spa.states]))
+
+    y = Real(f'y_hd_{var_suffix}')
+
+    return And(y == primal_objective, y == dual_objective, primal_constraints, dual_constraints), y
 
 
 def haus_formula(spa: DeterministicSPA, d: Array, a: str, s: str, t: str) -> tuple[BoolRef, BoolRef]:

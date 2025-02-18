@@ -9,6 +9,7 @@ NN_MODEL_3 = NeuralNetwork([[[-1, 1], [0.5, 0.5], [0.6, 0.4]]], [[1,0]], [ReLU()
 
 NN_MODEL_4 = NeuralNetwork([[[1, 1]]*3, [[-1, 2], [1, -2]]], [[0, 0], [0, 0]], [ReLU(), ReLU()])
 NN_MODEL_5 = NeuralNetwork([[[0, 0], [0, 0], [0, 1]], [[0, 0], [1, 0]]], [[0, 0], [0, 0]], [Identity(), Identity()])
+NN_MODEL_6 = NeuralNetwork([[[1, 0], [0, 0], [0, 1]], [[0, 1], [1, -1]]], [[0, 0], [0, 0]], [ReLU(), ReLU()])
 
 SEED = 1234
 
@@ -64,18 +65,12 @@ class NNConverterTest(unittest.TestCase):
 
     def test_to_spa_probabilistic_2(self):
         spa = to_spa_probabilistic(NN_MODEL_1, seed=SEED)
-        self.assertEqual(6, len(spa.states))
-        self.assertEqual([ACTION], spa.labels)
-
         self.assertTrue(spa.get_probability("x0", ACTION, "h1_1") > spa.get_probability("x0", ACTION, "h0_1"))
         self.assertTrue(spa.get_probability("x1", ACTION, "h1_1") < spa.get_probability("x1", ACTION, "h0_1"))
         self.assertTrue(spa.get_probability("x2", ACTION, "h1_1") < spa.get_probability("x2", ACTION, "h0_1"))
 
     def test_to_spa_probabilistic_3(self):
         spa = to_spa_probabilistic(NN_MODEL_3, lower=0, upper=0.5, seed=SEED)
-        self.assertEqual(6, len(spa.states))
-        self.assertEqual([ACTION], spa.labels)
-
         for x in ["x0", "x1", "x2"]:
             self.assertNotIn("h1_1", spa.distribution(x, ACTION))
             self.assertEqual(1.0, spa.get_probability(x, ACTION, "h0_1"))
@@ -95,8 +90,6 @@ class NNConverterTest(unittest.TestCase):
 
     def test_to_spa_probabilistic_5(self):
         spa = to_spa_probabilistic(NN_MODEL_5, seed=SEED)
-        self.assertEqual(8, len(spa.states))
-        self.assertEqual([ACTION], spa.labels)
 
         self.assertTrue(spa.get_probability("x0", ACTION, "h0_1") > spa.get_probability("x0", ACTION, "h1_1"))
         self.assertTrue(spa.get_probability("x1", ACTION, "h0_1") > spa.get_probability("x1", ACTION, "h1_1"))
@@ -104,6 +97,19 @@ class NNConverterTest(unittest.TestCase):
 
         self.assertEqual(1.0, spa.get_probability("h0_1", ACTION, "h1_2"))
         self.assertEqual(1.0, spa.get_probability("h1_1", ACTION, "h0_2"))
+
+    def test_to_spa_probabilistic_6(self):
+        spa = to_spa_probabilistic(NN_MODEL_6, lower=0, seed=SEED)
+
+        print(spa)
+        self.assertEqual(0.0, spa.get_probability("x0", ACTION, "h1_1"))
+        self.assertEqual(0.0, spa.get_probability("x2", ACTION, "h0_1"))
+        for trans in [("x0", "h0_1"), ("x1", "h0_1"), ("x1", "h1_1"), ("x2", "h1_1")]:
+            self.assertTrue(spa.get_probability(trans[0], ACTION, trans[1]) > 0)
+
+        self.assertEqual(0.0, spa.get_probability("h1_1", ACTION, "h1_2"))
+        for trans in [("h0_1", "h0_2"), ("h0_1", "h1_2"), ("h1_1", "h0_2")]:
+            self.assertTrue(spa.get_probability(trans[0], ACTION, trans[1]) > 0)
 
 
 

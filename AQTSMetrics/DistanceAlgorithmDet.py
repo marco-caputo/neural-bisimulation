@@ -9,7 +9,7 @@ def distance_approx_det(spa: DeterministicSPA, epsilon: float, s: str, t: str):
     upper_bound = 1
     m = 0.5
     solver = Solver()
-    solver.set("timeout", 15000)
+    solver.set("timeout", 60000)
     for i in range(math.ceil(math.log(1 / epsilon, 2))):
         sat_constraints = []
         unb_constraints = []
