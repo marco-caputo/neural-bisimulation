@@ -2,7 +2,7 @@ from typing import List, Tuple, Optional
 from z3 import *
 
 
-def get_float_formula_satisfiability(formula: BoolRef, inputs: List[float]) -> Tuple[bool, List[float] | None]:
+def get_float_formula_satisfiability(formula: BoolRef, inputs: List[Real]) -> Tuple[bool, List[float] | None]:
     """
     Checks the satisfiability of a Z3 formula involving the given list of real variables as inputs and returns a
     counterexample if the formula is satisfiable.

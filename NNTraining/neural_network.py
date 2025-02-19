@@ -1,19 +1,8 @@
-from sklearn.model_selection import train_test_split
 import pandas as pd
 from keras._tf_keras.keras.layers import Dense
 from keras import losses, Sequential
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import joblib
-
-
-def divide_dataset(dataset_name:str):
-    #Dividing the Datasets into Training and Testing Datasets
-    df = pd.read_csv(f"{dataset_name}.csv")
-
-    train_df, test_df = train_test_split(df, test_size=0.2, random_state=42)
-
-    train_df.to_csv(f"transformed_datasets/train_{dataset_name.replace('datasets/', '')}.csv", index=False)
-    test_df.to_csv(f"transformed_datasets/test_{dataset_name.replace('datasets/', '')}.csv", index=False)
 
 
 class StrokeNeuralNetwork:
@@ -69,5 +58,5 @@ class StrokeNeuralNetwork:
         self.model.fit(features_train, labels_train, epochs=30, batch_size=128, validation_data=(features_test, labels_test))
 
         # Save the trained model and scaler
-        self.model.save(f"models/model_{dataset_name}_dim{len(self.model.layers)}_out{self.model.output_shape[-1]}.keras")  # Save model
+        self.model.save(f"models/model_{dataset_name}_dim{len(self.model.layers)}_{self.model.layers[1].units}_out{self.model.output_shape[-1]}.keras")  # Save model
         joblib.dump(sc, f"models/scaler_{dataset_name}_dim{len(self.model.layers)}_out{self.model.output_shape[-1]}.pkl")  # Save scaler
