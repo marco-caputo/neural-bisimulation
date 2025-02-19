@@ -101,7 +101,6 @@ class NNConverterTest(unittest.TestCase):
     def test_to_spa_probabilistic_6(self):
         spa = to_spa_probabilistic(NN_MODEL_6, lower=0, seed=SEED)
 
-        print(spa)
         self.assertEqual(0.0, spa.get_probability("x0", ACTION, "h1_1"))
         self.assertEqual(0.0, spa.get_probability("x2", ACTION, "h0_1"))
         for trans in [("x0", "h0_1"), ("x1", "h0_1"), ("x1", "h1_1"), ("x2", "h1_1")]:

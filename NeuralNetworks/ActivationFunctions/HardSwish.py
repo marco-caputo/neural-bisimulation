@@ -1,5 +1,6 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Real
+from z3 import If, Real, ArithRef
+
 
 class HardSwish(ActivationFunction):
     """
@@ -19,7 +20,7 @@ class HardSwish(ActivationFunction):
         else:
             return x * (x / 6 + 0.5)
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return x * \
             If(x <= -3, 0,
                If(x >= 3, 1,

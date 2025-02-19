@@ -1,5 +1,5 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Real
+from z3 import If, Real, ArithRef
 
 
 class HardSigmoid(ActivationFunction):
@@ -21,7 +21,7 @@ class HardSigmoid(ActivationFunction):
         else:
             return x / 6 + 0.5
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return If(x <= -3, 0,
                   If(x >= 3, 1,
                      x / 6 + 0.5))

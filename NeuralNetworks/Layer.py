@@ -77,5 +77,5 @@ class Layer:
     def __call__(self, inputs: list[float]) -> list[float]:
         return self.forward_pass(inputs)
 
-    def __str__(self):
+    def __repr__(self):
         return f"Weights: {self.weights}, Biases: {self.biases}, Activation Functions: {self.activation_functions}"

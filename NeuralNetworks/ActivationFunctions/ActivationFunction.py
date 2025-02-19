@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from z3 import BoolRef, Real
+from z3 import Real, ArithRef
 
 
 class ActivationFunction(ABC):
@@ -19,7 +19,7 @@ class ActivationFunction(ABC):
         ...
 
     @abstractmethod
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         """
         Returns the z3 SMT formula that represents the input-output relation of this activation function.
         

@@ -1,5 +1,5 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Real
+from z3 import If, Real, ArithRef
 
 
 class Threshold(ActivationFunction):
@@ -18,5 +18,5 @@ class Threshold(ActivationFunction):
     def apply(self, x: float) -> float:
         return x if x > self.threshold else self.value
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return If(x > self.threshold, x, self.value)

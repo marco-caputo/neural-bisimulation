@@ -16,7 +16,7 @@ def divide_dataset(dataset_name:str):
     test_df.to_csv(f"transformed_datasets/test_{dataset_name.replace('datasets/', '')}.csv", index=False)
 
 
-class NeuralNetwork:
+class StrokeNeuralNetwork:
 
     # Building a Neural Network Model with the Same Number of Neurons for Each Layer
     def __init__(self, layers: int, neurons: int, input_neurons, output_neurons=1):
@@ -32,10 +32,10 @@ class NeuralNetwork:
         loss = (
             losses.SparseCategoricalCrossentropy(from_logits=True) if output_neurons > 2 else (  # Label is [0, 1, 2, ...]
             losses.CategoricalCrossentropy(from_logits=True) if output_neurons == 2 else  # Label is [0, 1] or [1, 0]
-            losses.BinaryCrossentropy(from_logits=True))  # Label is 0 or 1
+            losses.BinaryCrossentropy(from_logits=False))  # Label is 0 or 1
         )
 
-        model.add(Dense(output_neurons))
+        model.add(Dense(output_neurons, activation= None if output_neurons > 1 else "sigmoid"))
         model.compile(optimizer="adam", loss=loss, metrics=["accuracy"])
 
         self.model = model
@@ -69,5 +69,5 @@ class NeuralNetwork:
         self.model.fit(features_train, labels_train, epochs=30, batch_size=128, validation_data=(features_test, labels_test))
 
         # Save the trained model and scaler
-        self.model.save(f"models/model_{dataset_name}_{self.model.layers[1].units}.h5")  # Save model
-        joblib.dump(sc, f"models/scaler_{dataset_name}_{self.model.layers[1].units}.pkl")  # Save scaler
+        self.model.save(f"models/model_{dataset_name}_dim{len(self.model.layers)}_out{self.model.output_shape[-1]}.keras")  # Save model
+        joblib.dump(sc, f"models/scaler_{dataset_name}_dim{len(self.model.layers)}_out{self.model.output_shape[-1]}.pkl")  # Save scaler

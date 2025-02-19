@@ -68,6 +68,9 @@ def get_layer_activation(layer: tf.keras.layers.Layer) -> ActivationFunction | N
             0.0)
         return ReLU(max_val=max_val, threshold=threshold, negative_slope=negative_slope)
 
+    if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.sigmoid:
+        return Sigmoid()
+
     if l_type == tf.keras.layers.Activation and layer.activation == tf.keras.activations.hard_sigmoid:
         return HardSigmoid()
 
@@ -100,6 +103,8 @@ def _to_layer(activation: Callable) -> Any:
         return tf.keras.layers.Activation(tf.keras.activations.hard_swish)
     if activation == tf.keras.activations.hard_silu:
         return tf.keras.layers.Activation(tf.keras.activations.hard_silu)
+    if activation == tf.keras.activations.sigmoid:
+        return tf.keras.layers.Activation(tf.keras.activations.sigmoid)
 
     raise NotImplementedError(f"Unsupported activation function: {activation}")
 

@@ -1,5 +1,5 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, Real
+from z3 import Real, ArithRef
 
 
 class Identity(ActivationFunction):
@@ -15,5 +15,5 @@ class Identity(ActivationFunction):
     def apply(self, x: float) -> float:
         return x
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return x
