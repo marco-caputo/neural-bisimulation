@@ -3,31 +3,22 @@ from NNTraining.neural_network import *
 
 def train_networks():
     # Transforming the Datasets (Comment Out if Already Done)
-    divide_dataset("datasets/female_dataset")
-    divide_dataset("datasets/male_dataset")
-    divide_dataset("datasets/female_diet_dataset")
+    for dataset in ["datasets/female_dataset", "datasets/male_dataset", "datasets/female_diet_dataset"]:
+        divide_dataset(dataset)
 
-    # Training the Neural Networks
-    small_nn_males = NeuralNetwork(1, 4, 5, 2)
-    small_nn_males.train("male", "Heart_Attack_Outcome", ["Smoking_Status"])
-    medium_nn_males = NeuralNetwork(2, 5, 5, 2)
-    medium_nn_males.train("male", "Heart_Attack_Outcome", ["Smoking_Status"])
-    large_nn_males = NeuralNetwork(4, 8, 5, 2)
-    large_nn_males.train("male", "Heart_Attack_Outcome", ["Smoking_Status"])
-
-    small_nn_females = NeuralNetwork(1, 4, 5, 2)
-    small_nn_females.train("female", "Heart_Attack_Outcome", ["Smoking_Status"])
-    medium_nn_females = NeuralNetwork(2, 5, 5, 2)
-    medium_nn_females.train("female", "Heart_Attack_Outcome", ["Smoking_Status"])
-    large_nn_females = NeuralNetwork(4, 8, 5, 2)
-    large_nn_females.train("female", "Heart_Attack_Outcome", ["Smoking_Status"])
-
-    small_nn_female_stress = NeuralNetwork(1, 4, 5, 2)
-    small_nn_female_stress.train("female_diet", "Diet_Quality", ["Smoking_Status"])
-    medium_nn_females = NeuralNetwork(2, 5, 5, 2)
-    medium_nn_females.train("female_diet", "Diet_Quality", ["Smoking_Status"])
-    large_nn_females = NeuralNetwork(4, 8, 5, 2)
-    large_nn_females.train("female_diet", "Diet_Quality", ["Smoking_Status"])
+    for dataset, label in [("male", "Heart_Attack_Outcome"), ("female", "Heart_Attack_Outcome"), ("female_diet", "Diet_Quality")]:
+        for layers, hidden_neurons in [(1, 4), (2, 5), (4, 8)]:
+            for output_neurons in [1, 2]:
+                small_nn_males = StrokeNeuralNetwork(layers, hidden_neurons, 5, output_neurons)
+                small_nn_males.train(dataset, label, ["Smoking_Status"])
 
 
-train_networks()
+def train_and_save_models():
+    # Transforming the Datasets (Comment Out if Already Done)
+    divide_dataset()
+    # Train and save networks
+    train_networks()
+
+
+if __name__ == "__main__":
+    train_and_save_models()
