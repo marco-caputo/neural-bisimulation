@@ -67,8 +67,7 @@ class Layer:
             raise ValueError("The number of inputs must be equal to the number of neurons in the previous layer.")
 
         return [self.activation_functions[j](
-                    sum(self.weights[i][j] * inputs[i] for i in range(len(inputs))) + self.biases[j]
-                )
+                    sum(self.weights[i][j] * inputs[i] for i in range(len(inputs))) + self.biases[j])
                 for j in range(self.size())]
 
     def __len__(self):

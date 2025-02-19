@@ -16,8 +16,7 @@ def get_float_formula_satisfiability(formula: BoolRef, inputs: List[float]) -> T
     result = s.check()
     if result == sat:
         model = s.model()
-        return True, [float(model.evaluate(x).as_decimal(10).rstrip('?')) for x in
-                      inputs]  # Forse bastava fare model[x].as_long()
+        return True, [float(model.evaluate(x).as_decimal(10).rstrip('?')) for x in inputs]
     elif result == unsat:
         return False, None
     else:
