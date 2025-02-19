@@ -10,6 +10,7 @@ from .HardSwish import HardSwish
 from .HardShrink import HardShrink
 from .Threshold import Threshold
 from .Identity import Identity
+from .Sigmoid import Sigmoid
 
 AVAILABLE_ACTIVATION_FUNCTIONS = set()
 

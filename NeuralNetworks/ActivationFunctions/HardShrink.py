@@ -1,5 +1,5 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Or, Real
+from z3 import If, Or, Real, ArithRef
 
 
 class HardShrink(ActivationFunction):
@@ -17,5 +17,5 @@ class HardShrink(ActivationFunction):
     def apply(self, x: float) -> float:
         return x if x > self.lambd or x < -self.lambd else 0
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return If(Or(x > self.lambd, x < -self.lambd), x, 0)

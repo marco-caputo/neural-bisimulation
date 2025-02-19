@@ -57,6 +57,9 @@ def get_layer_activation(layer: torch.nn.Module) -> ActivationFunction | None:
         negative_slope = layer.negative_slope if l_type == torch.nn.LeakyReLU else 0.0
         return ReLU(max_val=max_val, threshold=threshold, negative_slope=negative_slope)
 
+    if l_type == torch.nn.Sigmoid:
+        return Sigmoid()
+
     if l_type == torch.nn.Hardsigmoid:
         return HardSigmoid()
 

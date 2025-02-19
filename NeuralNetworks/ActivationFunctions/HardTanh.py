@@ -1,5 +1,6 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Real
+from z3 import If, Real, ArithRef
+
 
 class HardTanh(ActivationFunction):
     """
@@ -21,7 +22,7 @@ class HardTanh(ActivationFunction):
         else:
             return x
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         return If(x <= self.min_val, self.min_val,
                   If(x >= self.max_val, self.max_val,
                      x))

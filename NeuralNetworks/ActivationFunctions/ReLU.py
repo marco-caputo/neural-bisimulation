@@ -1,5 +1,5 @@
 from NeuralNetworks.ActivationFunctions import ActivationFunction
-from z3 import BoolRef, If, Real
+from z3 import If, Real, ArithRef
 
 
 class ReLU(ActivationFunction):
@@ -24,7 +24,7 @@ class ReLU(ActivationFunction):
         else:
             return self.negative_slope * (x - self.threshold)
 
-    def formula(self, x: Real) -> BoolRef:
+    def formula(self, x: Real) -> ArithRef:
         formula = If(x >= self.threshold, x, self.negative_slope * (x - self.threshold))
         if self.max_val is not None: formula = If(x >= self.max_val, self.max_val, formula)
         return formula

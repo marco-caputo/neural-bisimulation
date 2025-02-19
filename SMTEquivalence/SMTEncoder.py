@@ -1,13 +1,16 @@
 from typing import List, Tuple
 from z3 import *
 
-from .SMTUtils import get_float_formula_satisfiability, encode_into_SMT_formula
+from .SMTUtils import get_float_formula_satisfiability
 from NeuralNetworks import *
 
-# Converts two models, possibly from PyTorch or TensorFlow, into NeuralNetwork objects.
-# If the models are already NeuralNetwork objects, they are returned as they are.
-def _convert_models_to_neural_network(model1: torch.nn.Module | tf.keras.Model,
+
+def convert_models_to_neural_networks(model1: torch.nn.Module | tf.keras.Model,
                                       model2: torch.nn.Module | tf.keras.Model) -> Tuple[NeuralNetwork, NeuralNetwork]:
+    """
+    Converts two models, possibly from PyTorch or TensorFlow, into NeuralNetwork objects.
+    If the models are already NeuralNetwork objects, they are returned as they are.
+    """
     if not isinstance(model1, NeuralNetwork):
         model1 = NeuralNetwork.from_model(model1)
     if not isinstance(model2, NeuralNetwork):
@@ -15,18 +18,107 @@ def _convert_models_to_neural_network(model1: torch.nn.Module | tf.keras.Model,
     return model1, model2
 
 
-#Checks if the input and output dimensions of the two models are the same.
-#If the dimensions are different, a ValueError is raised.
-def _check_models_dimensions(model1: NeuralNetwork, model2: NeuralNetwork):
-    if model1.input_size() != model2.input_size():
-        raise ValueError(f"Expected models with the same input dimension, but got {model1.input_size()} and {model2.input_size()}")
-    if model1.output_size() != model2.output_size():
-        raise ValueError(f"Expected models with the same output dimension, but got {model1.output_size()} and {model2.output_size()}")
+def encode_into_SMT_formula(model: NeuralNetwork | tf.keras.Model | torch.nn.Module,
+                            input_bounds: List[Tuple[float, float] | List[Tuple[float, float]]] = None,
+                            var_prefix: str = "") \
+        -> Tuple[BoolRef, list[Real], list[Real]]:
+    """
+    Converts a NeuralNetwork, PyTorch or TensorFlow model into a SMT Formula representing its input-output relation.
+
+    The provided SMT Formula is a conjunction of constraints that represent the relation between the input
+    and output lists of variables of the model, in particular:
+
+    -
+        The input variables are constrained to the specified inclusive input bounds, if provided.
+        If specific inputs don't have a lower or upper bound, the corresponding bound can be set to None or
+        float('-inf') and float('inf') respectively.
+        For instance, input_bounds=[(0, 1), (None, 10), (float('-inf'), float('inf'))] adds the following constraints
+        to the formula: 0 <= x1 <= 1, x2 <= 10.
+
+    -
+        Intermediate variables are introduced for each layer of the model and constraints are added to the formula
+        to represent the layer's operation. Only linear activation functions can be encoded into SMT formulas.
+        Currently supported layer types and activation functions are:
+
+        - Affine Transformation (Linear/Dense)
+        - ReLU (ReLU, LeakyReLU, ReLU6)
+        - Sigmoid (Approximated)
+        - HardSigmoid
+        - Hard
+        - HardSwish (or HardSiLU)
+        - HardShrink
+        - Threshold
+
+    :param model: a NeuralNetwork, PyTorch or TensorFlow model
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] specifying the inclusive lower and upper bounds
+                      for each input variable.
+    :param: var_prefix: A prefix to add to the names of the variables in the produced SMT formula
+    :return: An SMT Formula representing the input-output relation of the model and the lists of input and output variables
+    """
+    if not isinstance(model, NeuralNetwork):
+        model = NeuralNetwork.from_model(model)
+
+    constraints = []
+
+    # Encode input variables and constraints
+    inputs = []
+    if input_bounds is None:
+        input_bounds = [(float('-inf'), float('inf'))] * model.input_size()
+    if len(input_bounds) != model.input_size():
+        raise ValueError(f"Expected {model.input_size()} input bounds, but got {len(input_bounds)}")
+
+    # Encode input bounds
+    def get_bounds(x: Real, l: float, u: float):
+        b = []
+        if l is not None and l != float('-inf'): b.append(l <= x)
+        if u is not None and u != float('inf'): b.append(x <= u)
+        return And(b)
+
+    for i, lu_bounds in enumerate(input_bounds):
+        x = Real(f'{var_prefix}x{i}')  # Define a Z3 variable for each input
+        inputs.append(x)
+        bounds_list = []
+
+        if isinstance(lu_bounds, tuple):
+            bounds_list.append(get_bounds(x, *lu_bounds))
+        else:
+            single_variable_bounds = []
+            for bounds in lu_bounds: single_variable_bounds.append(get_bounds(x, *bounds))
+            bounds_list.append(Or(single_variable_bounds))
+
+        if len(bounds_list) > 0:
+            constraints.append(And(bounds_list))
+
+    # Process each layer of the network
+    current_layer = list(inputs)
+    for l_idx, layer in enumerate(model.layers):
+        next_layer = []
+
+        # Encode the affine transformation of the layer z_j = sum_k (x_k * W_kj) + b_j
+        for j in range(layer.output_size()):
+            z = Real(f'{var_prefix}z{l_idx}_{j}')
+            affine_expr = Sum([current_layer[k] * layer.weights[k][j] for k in range(layer.input_size())]) \
+                          + layer.biases[j]
+            constraints.append(simplify(z == affine_expr))
+            next_layer.append(z)
+
+        current_layer = next_layer
+        next_layer = []
+
+        # Encode the activation function of the layer h_j = f(z_j)
+        for j, z in enumerate(current_layer):
+            h = Real(f'{var_prefix}h{l_idx}_{j}')
+            constraints.append(simplify(h == layer.activation_functions[j].formula(z)))
+            next_layer.append(h)
+
+        current_layer = next_layer
+
+    return And(constraints), inputs, current_layer
 
 
 def are_strict_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Model,
                           model2: NeuralNetwork | torch.nn.Module | tf.keras.Model,
-                          input_bounds: List[Tuple[float, float]] = None,
+                          input_bounds: List[Tuple[float, float] | List[Tuple[float, float]]] | None = None,
                           epsilon: float = 1e-6) \
         -> Tuple[bool, List[float] | None]:
     """
@@ -60,28 +152,16 @@ def are_strict_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Mod
     :return: a tuple containing a boolean indicating if the two models are strictly equivalent and a counterexample
      if they are not
     """
-    model1, model2 = _convert_models_to_neural_network(model1, model2)
+    return _equivalence_check(model1, model2, input_bounds, are_not_strict_equivalent_formula(epsilon))
 
-    # Check if the input and output dimensions of the two models are the same
-    _check_models_dimensions(model1, model2)
 
-    # Encode the input-output relation of the two models into SMT formulas
-    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
-    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
-
-    # Build the strict equivalence formula
-    inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
-    outputs_equivalence = And([Abs(outputs1[i] - outputs2[i]) < epsilon for i in range(len(outputs1))])
-    formula = And(inputs_equivalence, formula1, formula2, Not(outputs_equivalence))
-
-    # Check if the formula is satisfiable (i.e., the two models are not strictly equivalent)
-    satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
-    return not satisfiability, input_values
+def are_not_strict_equivalent_formula(epsilon: float) -> Callable[[list[Real], list[Real]], BoolRef]:
+    return lambda out1, out2: Not(And([Abs(out1[i] - out2[i]) < epsilon for i in range(len(out1))]))
 
 
 def are_approximate_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Model,
                                model2: NeuralNetwork | torch.nn.Module | tf.keras.Model,
-                               input_bounds: List[Tuple[float, float]] = None,
+                               input_bounds: List[Tuple[float, float] | List[Tuple[float, float]]] | None = None,
                                p: float = 1,
                                epsilon: float = 1e-6):
     """
@@ -113,26 +193,34 @@ def are_approximate_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.kera
     :return: a tuple containing a boolean indicating if the two models are (p, epsilon)-approximately equivalent and a
      counterexample if they are not
     """
-    model1, model2 = _convert_models_to_neural_network(model1, model2)
-
     if p == float('inf'):
         return are_strict_equivalent(model1, model2, input_bounds, epsilon)
 
-    # Check if the input and output dimensions of the two models are the same
-    _check_models_dimensions(model1, model2)
+    return _equivalence_check(model1, model2, input_bounds, are_not_approximate_equivalent_formula(p, epsilon))
 
-    # Encode the input-output relation of the two models into SMT formulas
-    formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
-    formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
 
-    # Build the approximate equivalence formula
-    inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
-    outputs_distance = (Sum([Abs(outputs1[i] - outputs2[i])**p for i in range(len(outputs1))])**(1/p)) >= epsilon
-    formula = And(inputs_equivalence, formula1, formula2, outputs_distance)
+def are_not_approximate_equivalent_formula(p: float, epsilon: float) -> Callable[[list[Real], list[Real]], BoolRef]:
+    return lambda out1, out2: simplify(Sum([Abs(out1[i] - out2[i]) ** p for i in range(len(out1))]) ** (1 / p)) >= epsilon
 
-    # Check if the formula is satisfiable (i.e., the two models are not (p, epsilon)-approximately equivalent)
-    satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
-    return not satisfiability, input_values
+
+def are_argmax_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Model,
+                          model2: NeuralNetwork | torch.nn.Module | tf.keras.Model,
+                          input_bounds: List[Tuple[float, float] | List[Tuple[float, float]]] | None = None):
+    """
+    Checks if two feed-forward models are argmax equivalent.
+    """
+    return _equivalence_check(model1, model2, input_bounds, are_not_argmax_equivalent_formula())
+
+
+def are_not_argmax_equivalent_formula() -> Callable[[list[Real], list[Real]], BoolRef]:
+    out_array_1, out_array_2 = Array('out1', IntSort(), RealSort()), Array('out2', IntSort(), RealSort())
+    i1, i2 = Int('i1'), Int('i2')
+    return lambda out1, out2: And(And([out_array_1[i] == out1[i] for i in range(len(out1))] +
+                                        [out_array_2[i] == out2[i] for i in range(len(out2))]),
+                                  And([i1 >= 0, i1 < len(out1), i2 >= 0, i2 < len(out1)]),
+                                  _argmaxis_formula(out_array_1, i1, len(out1)),
+                                  _argmaxis_formula(out_array_2, i2, len(out1)),
+                                  i1 != i2)
 
 
 def _argmaxis_formula(out_array: Array, i: Int, m: int) -> BoolRef:
@@ -144,16 +232,27 @@ def _argmaxis_formula(out_array: Array, i: Int, m: int) -> BoolRef:
     :param i: The index of the element to check
     :param m: The size of the output vector
     """
-    return And([Or(And(j<i, out_array[i] > out_array[j]), And(i<=j, out_array[i] >= out_array[j]))
+    return And([Or(And(j < i, out_array[i] > out_array[j]), And(i <= j, out_array[i] >= out_array[j]))
                 for j in range(m)])
 
-def are_argmax_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Model,
-                          model2: NeuralNetwork | torch.nn.Module | tf.keras.Model,
-                          input_bounds: List[Tuple[float, float]] = None):
-    """
-    Checks if two feed-forward models are argmax equivalent.
-    """
-    model1, model2 = _convert_models_to_neural_network(model1, model2)
+
+#Checks if the input and output dimensions of the two models are the same.
+#If the dimensions are different, a ValueError is raised.
+def _check_models_dimensions(model1: NeuralNetwork, model2: NeuralNetwork):
+    if model1.input_size() != model2.input_size():
+        raise ValueError(
+            f"Expected models with the same input dimension, but got {model1.input_size()} and {model2.input_size()}")
+    if model1.output_size() != model2.output_size():
+        raise ValueError(
+            f"Expected models with the same output dimension, but got {model1.output_size()} and {model2.output_size()}")
+
+
+def _equivalence_check(model1: NeuralNetwork | torch.nn.Module | tf.keras.Model,
+                       model2: NeuralNetwork | torch.nn.Module | tf.keras.Model,
+                       input_bounds: List[Tuple[float, float] | List[Tuple[float, float]]],
+                       output_formula: Callable[[List[Real], List[Real]], BoolRef]) \
+        -> Tuple[bool, List[float] | None]:
+    model1, model2 = convert_models_to_neural_networks(model1, model2)
 
     # Check if the input and output dimensions of the two models are the same
     _check_models_dimensions(model1, model2)
@@ -162,22 +261,10 @@ def are_argmax_equivalent(model1: NeuralNetwork | torch.nn.Module | tf.keras.Mod
     formula1, inputs1, outputs1 = encode_into_SMT_formula(model1, input_bounds=input_bounds, var_prefix="m1_")
     formula2, inputs2, outputs2 = encode_into_SMT_formula(model2, input_bounds=input_bounds, var_prefix="m2_")
 
-    # Build the argmax equivalence formula
-    out_array_1, out_array_2 = Array('out1', IntSort(), RealSort()), Array('out2', IntSort(), RealSort())
+    # Build the strict equivalence formula
     inputs_equivalence = And([inputs1[i] == inputs2[i] for i in range(len(inputs1))])
+    formula = And(inputs_equivalence, formula1, formula2, output_formula(outputs1, outputs2))
 
-    out_array_equivalence = And([out_array_1[i] == outputs1[i] for i in range(len(outputs1))] +
-                                [out_array_2[i] == outputs2[i] for i in range(len(outputs2))])
-    i1, i2, m = Int('i1'), Int('i2'), len(outputs1)
-    i_constraints = And([i1 >= 0, i1 < m, i2 >= 0, i2 < m])
-    different_argmax = And(out_array_equivalence,
-                           i_constraints,
-                           _argmaxis_formula(out_array_1, i1, m),
-                           _argmaxis_formula(out_array_2, i2, m),
-                           i1 != i2)
-
-    formula = And(inputs_equivalence, formula1, formula2, different_argmax)
-
-    # Check if the formula is satisfiable (i.e., the two models are not argmax equivalent)
+    # Check if the formula is satisfiable (i.e., the two models are not strictly equivalent)
     satisfiability, input_values = get_float_formula_satisfiability(formula, inputs1)
     return not satisfiability, input_values
