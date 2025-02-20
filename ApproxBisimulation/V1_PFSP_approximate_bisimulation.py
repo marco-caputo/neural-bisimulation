@@ -1,9 +1,5 @@
 from ApproxBisimulation import PFSP
-from typing import Set, Dict, List
-
-from werkzeug.datastructures import MultiDict
-
-#TODO remove BisPy from the library and from .gitmodules
+from typing import Dict, List
 
 class ApproxBisV1PFSPManager:
     """Approximate bisimulation manager for PFSP with only one action and no tau moves (|V|=1)"""
@@ -135,7 +131,9 @@ def _print_results_on_console(hausdorff_layers_distances: List[float], epsilon: 
         
         sum += distance
 
-    print("\nmedium distance: " + str(round(sum/resultList_len, 3)))
+    print()
+    print("epsilon = " + str(epsilon))
+    print("medium distance: " + str(round(sum/resultList_len, 3)))
     print("maximum distance: " + str(max(hausdorff_layers_distances)))
 
 

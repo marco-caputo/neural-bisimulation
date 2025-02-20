@@ -1,4 +1,4 @@
-from typing import Set, Dict, List
+from typing import Set, Dict
 from werkzeug.datastructures import MultiDict
 
 from AQTSMetrics import SPA
