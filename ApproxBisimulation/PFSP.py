@@ -7,7 +7,7 @@ from AQTSMetrics import SPA
 class ProbabilisticFiniteStateProcess:
     TAU = "τ"
 
-    def __init__(self, states: Set[str], start_state: str, transition_function: Dict[str, MultiDict[str, Dict[str, float]]] = dict()):
+    def __init__(self, states: Set[str], start_state: str, transition_function: Dict[str, MultiDict[str, Dict[str, float]]] = None):
         """
         Initializes a Finite State Process (FSP).
 
@@ -21,7 +21,8 @@ class ProbabilisticFiniteStateProcess:
 
         self.states = set(states)
         self.start = start_state
-        self.transition_function = transition_function #dict(transition_function) if transition_function is not None else dict()
+        # self.transition_function = transition_function #dict(transition_function) if transition_function is not None else dict()
+        self.transition_function = transition_function if transition_function is not None else {}
 
     def target_states(self, state: str, action: str) -> list[Dict[str, float]]:
         """
@@ -88,7 +89,9 @@ class ProbabilisticFiniteStateProcess:
                 for target_prob in targetsList:
                     for probability in target_prob.values():
                         prob_sum += probability
-                if (prob_sum != 1) & (prob_sum != 0):
+
+                prob_sum = round(prob_sum, 3)
+                if (prob_sum != 1) and (prob_sum != 0):
                     return False
         return True
 
