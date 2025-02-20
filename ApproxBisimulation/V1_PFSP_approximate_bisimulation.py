@@ -1,6 +1,8 @@
 from ApproxBisimulation import PFSP
 from typing import Set, Dict, List
 
+from werkzeug.datastructures import MultiDict
+
 #TODO remove BisPy from the library and from .gitmodules
 
 class ApproxBisV1PFSPManager:
@@ -17,7 +19,7 @@ class ApproxBisV1PFSPManager:
 
 
     def __init__(self, pfspA: PFSP.ProbabilisticFiniteStateProcess, pfspB: PFSP.ProbabilisticFiniteStateProcess):
-        if pfspA.all_observable_actions().__len__() != 1 | pfspA.all_observable_actions().__len__() != 1:
+        if pfspA.all_observable_actions().__len__() != 1 or pfspA.all_observable_actions().__len__() != 1:
             raise ValueError("Only single-action PFSP are accepted (1 observable action excluding tau actions).")
 
         self.studied_structures = (pfspA, pfspB)
@@ -25,31 +27,54 @@ class ApproxBisV1PFSPManager:
         self.calculate_all_nodes_cumulative_probabilities() #...while the other nestled elements are initialized and defined here.
 
 
-    def evaluate_probabilistic_approximate_bisimulation(self, epsilon: float) -> float:
+    def evaluate_probabilistic_approximate_bisimulation(self, epsilon: float, 
+                                                        print_results: bool = False) -> bool:
         """
         Evaluates if the two FSP are approximate bisimilar under an 'epsilon' tolerance.\n
         The function works with an adaptation fo the Hausdorff distance for probabilistic FSP.\n
         :return float: A bisimilitude percentage between the two transition systems.
         """
-        ...
+        if (epsilon < 0) or (epsilon > 1):
+            raise ValueError("The epsilon value must be in the interval [0, 1]")
+        
+        hausdorff_layers_distances = self._prob_approx_bis_evaluation()
+
+        if print_results:
+            _print_results_on_console(hausdorff_layers_distances, epsilon)
     
 
-    def _prob_approx_bis_evaluation(self, layer_ID: int, epsilon: float) -> float:
+    def _prob_approx_bis_evaluation(self, layer_ID: int = 0) -> List[float]:
         """
         Iterative component of the function 'evaluate_probabilistic_approximate_bisimulation'.\n
         From the starting couple of layers from the two pfsp, this function calculates
         the Hausdorff difference is calculated between each couple of layers until both of them reach their final layer.\n
         :return float: A bisimilitude percentage between the two transition systems.
         """
-        ...
+        maxIndex: int = max(self._search_matrix[0].__len__(), self._search_matrix[1].__len__()) - 1
+        i: int = 0
+        bisimilarityPercentage: float = 0.0
+        hausdorff_distances_list: list[float] = list()
+        while(i <= maxIndex): #compute an iterative version of the symmetric Hausdorff distance
+            layer_state_transition_dictA = safe_get(self._search_matrix[0], i)
+            layer_state_transition_dictB = safe_get(self._search_matrix[1], i)
+
+            hausdorff_distances_list.append(max(probabilistic_Hausdorff_distance(layer_state_transition_dictA, 
+                                                                                     layer_state_transition_dictB),
+                                                probabilistic_Hausdorff_distance(layer_state_transition_dictB, 
+                                                                                     layer_state_transition_dictA)))
+            i += 1
+        return hausdorff_distances_list #returning the worst result between all the layers
 
         
     def calculate_all_nodes_cumulative_probabilities(self) -> None:
         """
         For each state of the two pfsp a dict of reachable final states and the cumulative probability
-        is calculated and the result added into the 'research_matrix'.\n
+        is calculated and the result added into the matrix.\n
         Different actions are considered as different paths leading to equivalent states. So as 'eventually-merging deviations'.
         """
+        if ( not(self.studied_structures[0].check_probabilities()) or not(self.studied_structures[1].check_probabilities())):
+            raise ValueError("Detected a state's set of outgoing actions not having a valid probability distribution.")
+
         for i in [0,1]:
             self._nodes_cumulative_probs_calculation(i, 0, self.studied_structures[i].start)
 
@@ -93,3 +118,46 @@ class ApproxBisV1PFSPManager:
                         matrix_state_cumulativeProbs_to_finalStates.update({final_state_to_reach: new_probability})
 
         return matrix_state_cumulativeProbs_to_finalStates
+    
+
+@staticmethod
+def _print_results_on_console(hausdorff_layers_distances: List[float], epsilon: float) -> None:
+    """
+    Prints on console the list of results for each layer.
+    """
+
+    print("probabilistic approximate bisimulation results:\n")
+    sum = 0.0
+    resultList_len = hausdorff_layers_distances.__len__()
+    for i in range(resultList_len):
+        distance = hausdorff_layers_distances[i]
+        print("Hausdorff distance in layer "+str(i)+": "+str(round(distance, 3)) + "     Result: "+str(distance<=epsilon))
+        
+        sum += distance
+
+    print("\nmedium distance: " + str(round(sum/resultList_len, 3)))
+    print("maximum distance: " + str(max(hausdorff_layers_distances)))
+
+
+@staticmethod
+def probabilistic_Hausdorff_distance(layer_state_transition_dictA: Dict[str, Dict[str, float]], 
+                                        layer_state_transition_dictB: Dict[str, Dict[str, float]]) -> float:
+        #Compute Hausdorff distance function: max_A( Min_B ( d(a,b) ))
+        max_distances: list[float] = list()
+        for finalTransitionsA in layer_state_transition_dictA.values(): #iterating layerA's states
+            
+            min_distances: list[float] = list()
+            for finalTransitionsB in layer_state_transition_dictB.values(): #iterating layerB's states
+                
+                for finalTargetA, probA in finalTransitionsA.items(): #for every finalTargetA look for a finalTargetB
+                    
+                    probB = finalTransitionsB.get(finalTargetA) or 0 #If no corresponding value found, then the probability is 0    
+                    min_distances.append(abs(probA - probB))
+
+            max_distances.append(min(min_distances))
+
+        return max(max_distances)
+
+@staticmethod
+def safe_get(list: list, index: int):
+    return list[min(index, list.__len__() - 1)]
