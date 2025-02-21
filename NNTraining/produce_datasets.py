@@ -23,7 +23,7 @@ def remove_outliers(df, columns):
     return df[~outlier_mask]
 
 
-def preprocess_datasets():
+def preprocess_datasets_heart():
     # Load the dataset
     dataset_path = 'datasets/heart_attack_dataset.csv'
     df = pd.read_csv(dataset_path)
@@ -55,8 +55,69 @@ def preprocess_datasets():
                                                          'Obesity_Index',
                                                          'Smoking_Status',
                                                          'Diet_Quality']]
+    print(df_females_removed)
 
     # Save the filtered datasets to new CSV files
     df_females_removed.to_csv('datasets/male_dataset.csv', index=False)
     df_males_removed.to_csv('datasets/female_dataset.csv', index=False)
     df_males_removed_diet.to_csv('datasets/diet_dataset.csv', index=False)
+
+
+def preprocess_datasets_parkinson():
+    # Load the dataset
+    dataset_path = 'datasets/parkinsons_disease_data.csv'
+    df = pd.read_csv(dataset_path)
+
+    # Filter 1: Remove females and keep specific columns for analysis
+    df = df[['CholesterolTotal',
+            'SystolicBP',
+            'BMI',
+            'Smoking',
+            'Diagnosis']]
+
+    # Save the filtered datasets to new CSV files
+    df.to_csv('datasets/parkinson_dataset.csv', index=False)
+
+def preprocess_datasets_depression():
+    # Load the dataset
+    dataset_path = 'datasets/student_depression_data.csv'
+    df = pd.read_csv(dataset_path)
+
+    # Preprocessing
+    df["Gender"] = df["Gender"].map({"Female": 0, "Male": 1})
+
+    # Filter 1: Remove females and keep specific columns for analysis
+    df = df[['Age',
+            'CGPA',
+            'Work/Study Hours',
+            'Gender',
+            'Depression']
+    ]
+
+    # Save the filtered datasets to new CSV files
+    df.to_csv('datasets/depression_dataset.csv', index=False)
+
+def preprocess_datasets_heart_inverse():
+    # Load the dataset
+    dataset_path = 'datasets/heart_attack_dataset.csv'
+    df = pd.read_csv(dataset_path)
+
+    # Preprocessing
+    df["Smoking_Status"] = df["Smoking_Status"].map({"No": 0, "Yes": 1})
+
+    df1 = df[['Cholesterol_Level',
+           'Blood_Pressure_Systolic',
+           'Obesity_Index',
+           'Smoking_Status',
+           'Heart_Attack_Outcome']]
+
+    df['Heart_Attack_Outcome'] = df['Heart_Attack_Outcome'].map({1: 0, 0: 1})
+
+    df2 = df[['Cholesterol_Level',
+           'Blood_Pressure_Systolic',
+           'Obesity_Index',
+           'Smoking_Status',
+           'Heart_Attack_Outcome']]
+
+    df1.to_csv('datasets/heart_dataset.csv', index=False)
+    df2.to_csv('datasets/heart_inverse_dataset.csv', index=False)

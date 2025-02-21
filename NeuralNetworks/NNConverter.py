@@ -3,7 +3,8 @@ import numpy as np
 from scipy.stats import truncnorm
 
 from AQTSMetrics import SPA, DeterministicSPA
-from ApproxBisimulation import FiniteStateProcess
+from ApproxBisimulation.PFSP import ProbabilisticFiniteStateProcess
+
 from SMTEquivalence import get_optimal_solution, is_satisfiable
 from NeuralNetworks.NeuralNetwork import NeuralNetwork
 
@@ -13,7 +14,7 @@ START_STATE = "s"
 
 def to_fsp(model: NeuralNetwork,
            input_bounds: list[tuple[float, float]] = None,
-           shallow_bounds: bool = False) -> FiniteStateProcess:
+           shallow_bounds: bool = False) -> ProbabilisticFiniteStateProcess:
     """
     Converts a neural network to a Finite State Process (FSP) model.
     The FSP model is obtained by encoding the neural network as a set of states and transitions between them where:
@@ -33,7 +34,7 @@ def to_fsp(model: NeuralNetwork,
     :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] specifying the inclusive lower and upper bounds
                           for each input variable.
     :param shallow_bounds: A boolean flag indicating whether to use shallow bounds for the transitions between layers.
-    :return: A FiniteStateProcess model representing the given neural network.
+    :return: A ProbabilisticFiniteStateProcess model representing the given neural network.
     """
 
     # Declare output variables for each layer including the input layer
@@ -53,7 +54,7 @@ def to_fsp(model: NeuralNetwork,
     states = {START_STATE}
     for variables in variables_per_layer:
         states.update([str(v) for v in variables])
-    fsp = FiniteStateProcess(states, START_STATE)
+    fsp = ProbabilisticFiniteStateProcess(states, START_STATE)
 
     # Define max constraints for each node in each layer
     is_max_constraints = [[None for _ in range(len(variables))] for variables in variables_per_layer]
