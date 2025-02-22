@@ -1,4 +1,4 @@
-from typing import Set, Dict
+from typing import Set, Dict, List
 from werkzeug.datastructures import MultiDict
 
 from AQTSMetrics import SPA
@@ -65,7 +65,7 @@ class ProbabilisticFiniteStateProcess:
         """
         return {action for state in self.states for action in self.actions(state)} | {self.TAU}
 
-    def actions(self, state: str) -> Set[str]:
+    def actions(self, state: str) -> List[str]:
         """
         Returns the unordered list of actions allowed in a given state.
         If the given state is not in the set of states, a ValueError is raised.
@@ -103,23 +103,19 @@ class ProbabilisticFiniteStateProcess:
         """
         self.states.add(state)
 
-    def add_transition(self, state: str, action: str, target_state: str, probability: float):
+    def add_distribution(self, state: str, action: str, distribution: dict[str, float]):
         """
-        Adds a transition to the transition function.
+        Adds a transition distribution to the finite state process.
         If the given states are not in the set of states, a ValueError is raised.
         """
-        if state not in self.states or target_state not in self.states:
-            raise ValueError("States must be in the set of states")
+        for s in [state] + list(distribution.keys()):
+            if s not in self.states:
+                raise ValueError("States must be in the set of states")
 
         if state not in self.transition_function:
-            # self.transition_function[state] = dict()
-            self.transition_function.update({state: MultiDict()})
-        # if action not in self.transition_function[state]:
-            # self.transition_function[state][action] = MultiDict()
+            self.transition_function[state] = MultiDict()
             
-        self.transition_function.get(state).update({action: dict({target_state: probability})})
-
-        # self.transition_function[state][action].update({target_state: probability})
+        self.transition_function[state].update(MultiDict({action: distribution}))
 
 
     def to_spa(self) -> SPA:
@@ -143,7 +139,7 @@ class ProbabilisticFiniteStateProcess:
                 #     prob = probAndTargets[1]
                 #     data[state][action] = [{target: prob}]
 
-                data[state][action] = [self.target_states(state, action)]
+                data[state][action] = self.target_states(state, action)
 
         return SPA(data)
 

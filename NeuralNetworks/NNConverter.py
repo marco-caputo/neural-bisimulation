@@ -63,8 +63,9 @@ def to_fsp(model: NeuralNetwork,
             is_max_constraints[i][j] = And([variables[j] > variables[k] for k in range(len(variables)) if k != j])
 
     # Add transitions from the start state to the input variables
-    for input_variable in variables_per_layer[0]:
-        fsp.add_transition(START_STATE, ACTION, str(input_variable))
+    fsp.add_distribution(START_STATE, ACTION, {
+        str(input_variable): 1 / len(variables_per_layer[0]) for input_variable in variables_per_layer[0]
+    })
 
     affine_expressions = []
 
@@ -85,13 +86,20 @@ def to_fsp(model: NeuralNetwork,
             hidden_outputs_constraints[i - 1]
         ))
 
+        transitions = dict()
+
         # Check if the constraints are satisfiable and add the transition if so
         for j, v in enumerate(variables):
             for k, w in enumerate(variables_per_layer[i - 1]):
                 if is_satisfiable(And(And(affine_expressions),
                                       is_max_constraints[i][j],
                                       is_max_constraints[i - 1][k])):
-                    fsp.add_transition(str(w), ACTION, str(v))
+                    if str(w) not in transitions:
+                        transitions[str(w)] = []
+                    transitions[str(w)].append(str(v))
+
+        for w, vs in transitions.items():
+            fsp.add_distribution(str(w), ACTION, {str(v): 1 / len(vs) for v in vs})
 
     return fsp
 

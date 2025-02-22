@@ -1,6 +1,9 @@
 import unittest
+
+from werkzeug.datastructures import MultiDict
+
 from AQTSMetrics import SPA
-from ApproxBisimulation import FiniteStateProcess  # Assuming the class is in 'finite_state_process.py'
+from ApproxBisimulation import ProbabilisticFiniteStateProcess  # Assuming the class is in 'finite_state_process.py'
 
 
 class TestFiniteStateProcess(unittest.TestCase):
@@ -9,21 +12,21 @@ class TestFiniteStateProcess(unittest.TestCase):
         self.FSP1_states = {"s1", "s2", "s3"}
         self.FSP1_start_state = "s1"
         self.FSP1_transition_function = {
-            "s1": {"a": {"s2"}, "b": {"s3"}},
-            "s2": {"c": {"s3"}},
+            "s1": MultiDict([("a", {"s2": 1}), ("b", {"s3": 1})]),
+            "s2": MultiDict([("c", {"s3": 1})])
         }
-        self.FSP1 = FiniteStateProcess(
+        self.FSP1 = ProbabilisticFiniteStateProcess(
             states=self.FSP1_states,
             start_state=self.FSP1_start_state,
             transition_function=self.FSP1_transition_function
         )
 
-        self.FSP2 = FiniteStateProcess(
+        self.FSP2 = ProbabilisticFiniteStateProcess(
             states={"s1", "s2", "s3"},
             start_state="s1",
-            transition_function={
-                "s1": {"a": {"s2", "s3"}, "b": {"s3"}},
-                "s2": {"c": {"s1", "s2", "s3"}},
+            transition_function= {
+                "s1": MultiDict([("a", {"s2": 0.5, "s3": 0.5}), ("b", {"s3": 1})]),
+                "s2": MultiDict([("c", {"s1": 1/3, "s2": 1/3, "s3": 1/3})])
             }
         )
 
@@ -33,10 +36,10 @@ class TestFiniteStateProcess(unittest.TestCase):
         self.assertEqual(self.FSP1.transition_function, self.FSP1_transition_function)
 
     def test_target_states(self):
-        self.assertEqual(self.FSP1.target_states("s1", "a"), {"s2"})
-        self.assertEqual(self.FSP1.target_states("s1", "b"), {"s3"})
-        self.assertEqual(self.FSP1.target_states("s2", "c"), {"s3"})
-        self.assertEqual(self.FSP1.target_states("s2", "d"), set())  # Non-existent action
+        self.assertEqual(self.FSP1.target_states("s1", "a")[0], {"s2": 1})
+        self.assertEqual(self.FSP1.target_states("s1", "b")[0], {"s3": 1})
+        self.assertEqual(self.FSP1.target_states("s2", "c")[0], {"s3": 1})
+        self.assertEqual(self.FSP1.target_states("s2", "d"), list())  # Non-existent action
 
         with self.assertRaises(ValueError):
             self.FSP1.target_states("s4", "a")  # Non-existent state
@@ -46,12 +49,12 @@ class TestFiniteStateProcess(unittest.TestCase):
         self.assertEqual(expected_extension, self.FSP1.extension())
 
     def test_all_actions(self):
-        self.assertEqual(self.FSP1.all_actions(), {"a", "b", "c", FiniteStateProcess.TAU})
+        self.assertEqual(self.FSP1.all_actions(), {"a", "b", "c", ProbabilisticFiniteStateProcess.TAU})
 
     def test_actions(self):
-        self.assertEqual(self.FSP1.actions("s1"), {"a", "b"})
-        self.assertEqual(self.FSP1.actions("s2"), {"c"})
-        self.assertEqual(self.FSP1.actions("s3"), set())
+        self.assertEqual(self.FSP1.actions("s1"), ["a", "b"])
+        self.assertEqual(self.FSP1.actions("s2"), ["c"])
+        self.assertEqual(self.FSP1.actions("s3"), list())
 
         with self.assertRaises(ValueError):
             self.FSP1.actions("s4")  # Non-existent state
@@ -65,12 +68,12 @@ class TestFiniteStateProcess(unittest.TestCase):
         self.assertIn("s4", self.FSP1.states)
 
     def test_add_transition(self):
-        self.FSP1.add_transition("s1", "d", "s3")
-        self.assertEqual(self.FSP1.target_states("s1", "d"), {"s3"})
-        self.assertEqual(self.FSP1.actions("s1"), {"a", "b", "d"})
+        self.FSP1.add_distribution("s1", "d", {"s3": 0})
+        self.assertEqual(self.FSP1.target_states("s1", "d")[0], {"s3": 0})
+        self.assertEqual(self.FSP1.actions("s1"), ["a", "b", "d"])
 
         with self.assertRaises(ValueError):
-            self.FSP1.add_transition("s4", "e", "s5")  # Non-existent states
+            self.FSP1.add_distribution("s4", "e", {"s5": 1.0})  # Non-existent states
 
     def test_to_spa(self):
         spa_model = self.FSP1.to_spa()
