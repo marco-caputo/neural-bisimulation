@@ -63,17 +63,38 @@ class NNConverterTest(unittest.TestCase):
             self.assertNotIn("h0_1", spa.distribution(x, ACTION))
             self.assertEqual(1.0, spa.get_probability(x, ACTION, "h1_1"))
 
+    def test_tp_pfsp_probabilistic_1(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_1, lower=0, seed=SEED)
+        self.assertEqual(6, len(pfsp.states))
+        self.assertEqual({ProbabilisticFiniteStateProcess.TAU, ACTION}, pfsp.all_actions())
+
+        for x in ["x0", "x1", "x2"]:
+            self.assertEqual({"h1_1": 1.0}, pfsp.target_states(x, ACTION)[0])
+
     def test_to_spa_probabilistic_2(self):
         spa = to_spa_probabilistic(NN_MODEL_1, seed=SEED)
         self.assertTrue(spa.get_probability("x0", ACTION, "h1_1") > spa.get_probability("x0", ACTION, "h0_1"))
         self.assertTrue(spa.get_probability("x1", ACTION, "h1_1") < spa.get_probability("x1", ACTION, "h0_1"))
         self.assertTrue(spa.get_probability("x2", ACTION, "h1_1") < spa.get_probability("x2", ACTION, "h0_1"))
 
+    def test_to_pfsp_probabilistic_2(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_1, seed=SEED)
+        self.assertTrue(pfsp.target_states("x0", ACTION)[0]["h1_1"] > pfsp.target_states("x0", ACTION)[0]["h0_1"])
+        self.assertTrue(pfsp.target_states("x1", ACTION)[0]["h1_1"] < pfsp.target_states("x1", ACTION)[0]["h0_1"])
+        self.assertTrue(pfsp.target_states("x2", ACTION)[0]["h1_1"] < pfsp.target_states("x2", ACTION)[0]["h0_1"])
+
     def test_to_spa_probabilistic_3(self):
         spa = to_spa_probabilistic(NN_MODEL_3, lower=0, upper=0.5, seed=SEED)
         for x in ["x0", "x1", "x2"]:
             self.assertNotIn("h1_1", spa.distribution(x, ACTION))
             self.assertEqual(1.0, spa.get_probability(x, ACTION, "h0_1"))
+
+
+    def test_to_pfsp_probabilistic_3(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_3, lower=0, upper=0.5, seed=SEED)
+        for x in ["x0", "x1", "x2"]:
+            self.assertNotIn("h1_1", pfsp.target_states(x, ACTION)[0])
+            self.assertEqual(1.0, pfsp.target_states(x, ACTION)[0]["h0_1"])
 
     def test_to_spa_probabilistic_4(self):
         spa = to_spa_probabilistic(NN_MODEL_4, lower=0, upper=1, seed=SEED)
@@ -88,6 +109,18 @@ class NNConverterTest(unittest.TestCase):
         self.assertEqual(1.0, spa.get_probability("h0_1", ACTION, "h0_2"))
         self.assertEqual({}, spa.distribution("h1_1", ACTION))
 
+
+    def test_to_pfsp_probabilistic_4(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_4, lower=0, upper=1, seed=SEED)
+        self.assertEqual(8, len(pfsp.states))
+        self.assertEqual({ProbabilisticFiniteStateProcess.TAU, ACTION}, pfsp.all_actions())
+
+        for x in ["x0", "x1", "x2"]:
+            self.assertEqual({"h0_1": 1.0}, pfsp.target_states(x, ACTION)[0])
+
+        self.assertEqual({"h0_2": 1.0}, pfsp.target_states("h0_1", ACTION)[0])
+        self.assertEqual({}, pfsp.target_states("h1_1", ACTION)[0])
+
     def test_to_spa_probabilistic_5(self):
         spa = to_spa_probabilistic(NN_MODEL_5, seed=SEED)
 
@@ -97,6 +130,17 @@ class NNConverterTest(unittest.TestCase):
 
         self.assertEqual(1.0, spa.get_probability("h0_1", ACTION, "h1_2"))
         self.assertEqual(1.0, spa.get_probability("h1_1", ACTION, "h0_2"))
+
+
+    def test_to_pfsp_probabilistic_5(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_5, seed=SEED)
+
+        self.assertTrue(pfsp.target_states("x0", ACTION)[0]["h0_1"] > pfsp.target_states("x0", ACTION)[0]["h1_1"])
+        self.assertTrue(pfsp.target_states("x1", ACTION)[0]["h0_1"] > pfsp.target_states("x1", ACTION)[0]["h1_1"])
+        self.assertTrue(pfsp.target_states("x2", ACTION)[0]["h1_1"] > pfsp.target_states("x2", ACTION)[0]["h0_1"])
+
+        self.assertEqual({"h1_2": 1.0}, pfsp.target_states("h0_1", ACTION)[0])
+        self.assertEqual({"h0_2": 1.0}, pfsp.target_states("h1_1", ACTION)[0])
 
     def test_to_spa_probabilistic_6(self):
         spa = to_spa_probabilistic(NN_MODEL_6, lower=0, seed=SEED)
@@ -109,6 +153,18 @@ class NNConverterTest(unittest.TestCase):
         self.assertEqual(0.0, spa.get_probability("h1_1", ACTION, "h1_2"))
         for trans in [("h0_1", "h0_2"), ("h0_1", "h1_2"), ("h1_1", "h0_2")]:
             self.assertTrue(spa.get_probability(trans[0], ACTION, trans[1]) > 0)
+
+    def test_to_pfsp_probabilistic_6(self):
+        pfsp = to_pfsp_probabilistic(NN_MODEL_6, lower=0, seed=SEED)
+
+        self.assertNotIn("h1_1", pfsp.target_states("x0", ACTION)[0])
+        self.assertNotIn("h0_1", pfsp.target_states("x2", ACTION)[0])
+        for trans in [("x0", "h0_1"), ("x1", "h0_1"), ("x1", "h1_1"), ("x2", "h1_1")]:
+            self.assertTrue(pfsp.target_states(trans[0], ACTION)[0][trans[1]] > 0)
+
+        self.assertNotIn("h1_2", pfsp.target_states("h1_1", ACTION)[0])
+        for trans in [("h0_1", "h0_2"), ("h0_1", "h1_2"), ("h1_1", "h0_2")]:
+            self.assertTrue(pfsp.target_states(trans[0], ACTION)[0][trans[1]] > 0)
 
 
 

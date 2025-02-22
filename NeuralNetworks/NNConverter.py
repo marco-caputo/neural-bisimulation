@@ -1,3 +1,4 @@
+from werkzeug.datastructures import MultiDict
 from z3 import Real, Sum, And, BoolRef
 import numpy as np
 from scipy.stats import truncnorm
@@ -160,6 +161,53 @@ def to_spa_probabilistic(model: NeuralNetwork,
     :param upper: The upper bound for the truncation of the normal distribution.
     :param seed: The seed for the random sample generator.
     """
+    return DeterministicSPA(_to_spa_data(model, number_of_samples, mean, std_deviation, lower, upper, seed))
+
+
+def to_pfsp_probabilistic(model: NeuralNetwork,
+                          number_of_samples: int = 10000,
+                          mean: float = 0.0, std_deviation: float = 1.0,
+                          lower: float = None, upper: float = None,
+                          seed: int = None) -> ProbabilisticFiniteStateProcess:
+    """
+    Converts a neural network to a PFSP model.
+    The PFSP model is obtained by encoding the neural network as a set of states and transitions between them where:
+    - a state is created for each node in each layer of the network, representing the state where that node has the
+        maximum value in its layer,
+    - a single action is defined for each transition between states.
+    - a single distribution of probabilistic transitions is defined for each state-action pair.
+    - a probabilistic transition is added between two states if, according to weights and input bounds, the state of
+        a node having a maximum value in its layer can lead to a node in the next layer having the maximum value in
+        its layer.
+
+    The probability of each transition is derived heuristically by observing the hidden outputs of the network from
+    random input samples, obtained by a normal distribution with the given mean and standard deviation. The default
+    values for the mean and standard deviation are 0 and 1, respectively, which correspond to the typical values used
+    for data scaling in machine learning.
+    In-scale lower and upper bounds can be specified to limit the range of the generated samples.
+
+    :param model: a NeuralNetwork model,
+    :param number_of_samples: The number of samples to draw from the normal distribution.
+    :param mean: The mean of the normal distribution.
+    :param std_deviation: The standard deviation of the normal distribution.
+    :param lower: The lower bound for the truncation of the normal distribution.
+    :param upper: The upper bound for the truncation of the normal distribution.
+    :param seed: The seed for the random sample generator.
+    """
+    data = _to_spa_data(model, number_of_samples, mean, std_deviation, lower, upper, seed)
+
+    return ProbabilisticFiniteStateProcess(set(data.keys()), START_STATE, {
+        s: MultiDict([(ACTION, data[s][ACTION])]) for s in data
+    })
+
+
+
+def _to_spa_data(model: NeuralNetwork,
+                number_of_samples: int = 10000,
+                mean: float = 0.0, std_deviation: float = 1.0,
+                lower: float = None, upper: float = None,
+                seed: int = None) -> dict[str, dict[str, dict[str, float]]]:
+
     # Declare state strings for each layer including the input layer
     states_per_layer: list[list[str]] = [[f'x{i}' for i in range(model.input_size())]]
     for i, layer in enumerate(model.layers, 1):
@@ -169,7 +217,7 @@ def to_spa_probabilistic(model: NeuralNetwork,
     # Initialize the transition counts
     transition_counts = {s: dict() for s in states}
     for i in range(1, len(states_per_layer)):
-        for s1 in states_per_layer[i-1]:
+        for s1 in states_per_layer[i - 1]:
             for s2 in states_per_layer[i]:
                 transition_counts[s1][s2] = 0
 
@@ -180,7 +228,7 @@ def to_spa_probabilistic(model: NeuralNetwork,
                                   seed):
         for i, layer in enumerate(model.layers, 1):
             outputs = layer.forward_pass(inputs)
-            s1 = states_per_layer[i-1][inputs.index(max(inputs))]
+            s1 = states_per_layer[i - 1][inputs.index(max(inputs))]
             s2 = states_per_layer[i][outputs.index(max(outputs))]
             transition_counts[s1][s2] += 1
             inputs = outputs
@@ -196,7 +244,8 @@ def to_spa_probabilistic(model: NeuralNetwork,
     # Add initial state and transitions
     spa_data[START_STATE] = {ACTION: {s: 1 / len(states_per_layer[0]) for s in states_per_layer[0]}}
 
-    return DeterministicSPA(spa_data)
+    return spa_data
+
 
 def _random_vectors(num_vectors: int, vector_dim: int,
                     mean: float = 0., std_dev: float = 1.,
