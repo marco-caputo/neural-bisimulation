@@ -6,6 +6,7 @@ from NeuralNetworks import NeuralNetwork, HardSigmoid
 
 from SMTEquivalence.SMTEquivalenceComputer import *
 
+
 def approximate_equivalence_trial_1():
     # List of object names
     models = ["female_dim3_3",
@@ -45,7 +46,7 @@ def approximate_equivalence_trial_1():
             print(f"Similarity: {similarity}, Similarity Range: {similarity_range}, time: {time_taken}")
 
             for matrix, value in [(similarity_matrix, similarity), (ranges_matrix, similarity_range),
-                                     (counterexamples_matrix, counterexamples), (time_matrix, time_taken)]:
+                                  (counterexamples_matrix, counterexamples), (time_matrix, time_taken)]:
                 matrix[i, j] = value
                 matrix[j, i] = value
 
@@ -66,7 +67,6 @@ def approximate_equivalence_trial_1():
 
 
 def approximate_equivalence_trial_2():
-
     for dim in ["dim3_3",
                 "dim3_5",
                 "dim4_3"
@@ -74,9 +74,9 @@ def approximate_equivalence_trial_2():
 
         models = [f"heart_{dim}",
                   f"heart_{dim}",
-                  #f"depression_{dim}",
-                  #f"heart_inverse_{dim}"
-                ]
+                  f"depression_{dim}",
+                  f"heart_inverse_{dim}"
+                  ]
 
         size = len(models)
         similarity_matrix = np.full((size, size), np.nan)
@@ -123,6 +123,9 @@ def approximate_equivalence_trial_2():
 
         print("Files saved successfully!")
 
+
+def approximate_bisimulation_trial_1():
+    pass
 
 if __name__ == "__main__":
     approximate_equivalence_trial_2()

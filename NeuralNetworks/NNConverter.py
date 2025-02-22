@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from werkzeug.datastructures import MultiDict
 from z3 import Real, Sum, And, BoolRef
 import numpy as np
@@ -134,9 +136,9 @@ def to_spa_smt(model: NeuralNetwork,
 
 
 def to_spa_probabilistic(model: NeuralNetwork,
+                        input_bounds: list[tuple[float, float] | list[tuple[float, float]]] | None = None,
                         number_of_samples: int = 10000,
                         mean: float = 0.0, std_deviation: float = 1.0,
-                        lower: float = None, upper: float = None,
                         seed: int = None) -> DeterministicSPA:
     """
     Converts a neural network to a DSPA model.
@@ -148,26 +150,28 @@ def to_spa_probabilistic(model: NeuralNetwork,
         its layer.
 
     The probability of each transition is derived heuristically by observing the hidden outputs of the network from
-    random input samples, obtained by a normal distribution with the given mean and standard deviation. The default
-    values for the mean and standard deviation are 0 and 1, respectively, which correspond to the typical values used
-    for data scaling in machine learning.
-    In-scale lower and upper bounds can be specified to limit the range of the generated samples.
+    random input samples, obtained by a normal distribution with the given input bounds, mean and standard deviation.
+    The default values for the mean and standard deviation are 0 and 1, respectively, which correspond to the typical
+    values used for data scaling in machine learning.
+    In-scale lower and upper bounds can be specified to limit the range of the generated samples for each input feature.
+    For those input bounds having multiple intervals or describing a discrete distribution (multiple intervals having a
+    lower bound equal to the upper bound) the samples are generated uniformly from the given intervals.
 
-    :param model: a NeuralNetwork model,
+    :param model: a NeuralNetwork model.
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] or a list of lists of tuples
+    [[(l1, u1), ..., (ln, un)], ..., [(l1, u1), ..., (ln, un)]] specifying the inclusive lower and upper bounds.
     :param number_of_samples: The number of samples to draw from the normal distribution.
     :param mean: The mean of the normal distribution.
     :param std_deviation: The standard deviation of the normal distribution.
-    :param lower: The lower bound for the truncation of the normal distribution.
-    :param upper: The upper bound for the truncation of the normal distribution.
     :param seed: The seed for the random sample generator.
     """
-    return DeterministicSPA(_to_spa_data(model, number_of_samples, mean, std_deviation, lower, upper, seed))
+    return DeterministicSPA(_to_spa_data(model, input_bounds, number_of_samples, mean, std_deviation, seed))
 
 
 def to_pfsp_probabilistic(model: NeuralNetwork,
+                          input_bounds: list[tuple[float, float] | list[tuple[float, float]]] | None = None,
                           number_of_samples: int = 10000,
                           mean: float = 0.0, std_deviation: float = 1.0,
-                          lower: float = None, upper: float = None,
                           seed: int = None) -> ProbabilisticFiniteStateProcess:
     """
     Converts a neural network to a PFSP model.
@@ -187,14 +191,14 @@ def to_pfsp_probabilistic(model: NeuralNetwork,
     In-scale lower and upper bounds can be specified to limit the range of the generated samples.
 
     :param model: a NeuralNetwork model,
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] or a list of lists of tuples
+    [[(l1, u1), ..., (ln, un)], ..., [(l1, u1), ..., (ln, un)]] specifying the inclusive lower and upper bounds.
     :param number_of_samples: The number of samples to draw from the normal distribution.
     :param mean: The mean of the normal distribution.
     :param std_deviation: The standard deviation of the normal distribution.
-    :param lower: The lower bound for the truncation of the normal distribution.
-    :param upper: The upper bound for the truncation of the normal distribution.
     :param seed: The seed for the random sample generator.
     """
-    data = _to_spa_data(model, number_of_samples, mean, std_deviation, lower, upper, seed)
+    data = _to_spa_data(model, input_bounds, number_of_samples, mean, std_deviation, seed)
 
     return ProbabilisticFiniteStateProcess(set(data.keys()), START_STATE, {
         s: MultiDict([(ACTION, data[s][ACTION])]) for s in data
@@ -203,10 +207,13 @@ def to_pfsp_probabilistic(model: NeuralNetwork,
 
 
 def _to_spa_data(model: NeuralNetwork,
+                input_bounds: list[tuple[float, float] | list[tuple[float, float]]] | None = None,
                 number_of_samples: int = 10000,
                 mean: float = 0.0, std_deviation: float = 1.0,
-                lower: float = None, upper: float = None,
                 seed: int = None) -> dict[str, dict[str, dict[str, float]]]:
+
+    if input_bounds is not None and len(input_bounds) != model.input_size():
+        raise ValueError(f"Expected {model.input_size()} input bounds, but got {len(input_bounds)}")
 
     # Declare state strings for each layer including the input layer
     states_per_layer: list[list[str]] = [[f'x{i}' for i in range(model.input_size())]]
@@ -222,10 +229,7 @@ def _to_spa_data(model: NeuralNetwork,
                 transition_counts[s1][s2] = 0
 
     # Generate random input samples and count the transitions
-    for inputs in _random_vectors(number_of_samples, model.input_size(), mean, std_deviation,
-                                  lower if lower not in {None, float('-inf')} else -np.inf,
-                                  upper if upper not in {None, float('inf')} else np.inf,
-                                  seed):
+    for inputs in _random_vectors(number_of_samples, model.input_size(), input_bounds, mean, std_deviation, seed):
         for i, layer in enumerate(model.layers, 1):
             outputs = layer.forward_pass(inputs)
             s1 = states_per_layer[i - 1][inputs.index(max(inputs))]
@@ -248,25 +252,49 @@ def _to_spa_data(model: NeuralNetwork,
 
 
 def _random_vectors(num_vectors: int, vector_dim: int,
+                    input_bounds: list[tuple[float, float] | list[tuple[float, float]]] | None = None,
                     mean: float = 0., std_dev: float = 1.,
-                    lower: float = -np.inf, upper: float = np.inf,
                     seed: int = None) -> list[list[float]]:
     """
     Generates a sequence of random vectors from a Gaussian distribution with the given mean and standard deviation.
 
     :param num_vectors: Number of random vectors to generate
     :param vector_dim: Dimension of each random vector
+    :param input_bounds: A list of tuples [(l1, u1), ..., (ln, un)] or a list of lists of tuples for truncation
     :param mean: Mean of the Gaussian distribution
     :param std_dev: Standard deviation of the Gaussian distribution
-    :param lower: Lower bound for the truncation
-    :param upper: Upper bound for the truncation
     :return: List of random vectors (numpy arrays)
     """
-    a, b = (lower - mean) / std_dev, (upper - mean) / std_dev  # Convert bounds to standard normal scale
-    rng = np.random.default_rng(seed)  # Create a random generator with seed
-    random_vectors = truncnorm.rvs(a, b, loc=mean, scale=std_dev, size=(num_vectors, vector_dim), random_state=rng)
 
-    return random_vectors.tolist()
+    def _to_list(bounds: tuple) -> list[float]:
+        l = [bounds[0] if bounds[0] not in {None, float('-inf')} else -np.inf,
+             bounds[1] if bounds[1] not in {None, float('inf')} else np.inf]
+        return [(l[0] - mean) / std_dev, (l[1] - mean) / std_dev]
+
+    if input_bounds is None:
+        bounds_list = [[-np.inf, np.inf] for _ in range(vector_dim)]
+    else:
+        bounds_list = []
+        for bound in input_bounds:
+            if isinstance(bound, tuple):
+                bounds_list.append(_to_list(bound))
+            else:
+                bounds_list.append([_to_list(b) for b in bound])
+
+    rng = np.random.default_rng(seed)  # Create a random generator with seed
+
+    vectors = np.empty((num_vectors, vector_dim))  # Preallocate array
+    for i in range(vector_dim):
+        if not isinstance(bounds_list[i][0], list):
+            vectors[:, i] = truncnorm.rvs(bounds_list[i][0], bounds_list[i][1],
+                                          loc=mean, scale=std_dev, size=num_vectors, random_state=rng)
+        else:
+            for j in range(num_vectors):
+                lower_upper = rng.choice(bounds_list[i])
+                vectors[j, i] = rng.uniform(lower_upper[0], lower_upper[1])
+
+    return vectors.tolist()
+
 
 def _get_hidden_outputs_constraints(model: NeuralNetwork,
                                     input_bounds: list[tuple[float, float]],
