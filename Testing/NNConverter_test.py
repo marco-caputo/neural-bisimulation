@@ -157,6 +157,7 @@ class NNConverterTest(unittest.TestCase):
     def test_to_pfsp_probabilistic_6(self):
         pfsp = to_pfsp_probabilistic(NN_MODEL_6, input_bounds=[(0, float("inf"))]*3, seed=SEED)
 
+        self.assertEqual({"s", "x0", "x1", "x2", "h0_1", "h1_1", "h0_2", "h1_2"}, pfsp.states)
         self.assertNotIn("h1_1", pfsp.target_states("x0", ACTION)[0])
         self.assertNotIn("h0_1", pfsp.target_states("x2", ACTION)[0])
         for trans in [("x0", "h0_1"), ("x1", "h0_1"), ("x1", "h1_1"), ("x2", "h1_1")]:

@@ -1,2 +1,3 @@
 from .PFSP import ProbabilisticFiniteStateProcess
 from .V1_PFSP_approximate_bisimulation import ApproxBisV1PFSPManager
+from .ApproxBisimulationComputer import compute_approximate_bisimulation

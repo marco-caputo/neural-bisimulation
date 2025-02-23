@@ -174,7 +174,7 @@ def to_pfsp_probabilistic(model: NeuralNetwork,
                           mean: float = 0.0, std_deviation: float = 1.0,
                           seed: int = None) -> ProbabilisticFiniteStateProcess:
     """
-    Converts a neural network to a PFSP model.
+    Converts a neural network to a PFSP model though probabilistic sampling.
     The PFSP model is obtained by encoding the neural network as a set of states and transitions between them where:
     - a state is created for each node in each layer of the network, representing the state where that node has the
         maximum value in its layer,
